@@ -67,3 +67,25 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Ẩn scrollbar (Chrome, Safari) */
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+/* Ẩn scrollbar (Firefox) */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+/* Ẩn scrollbar (Edge, IE) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+}
+
+/* Làm cho scroll mượt như mobile */
+.scroll-smooth-custom {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* iOS/Android style */
+}

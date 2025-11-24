@@ -6,24 +6,26 @@ import KitchenScreen from "./screens/KitchenScreen";
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState(null); // null, 'menu', 'kitchen'
-
-  // Nếu chưa chọn màn hình, hiển thị HomeScreen
-  if (!currentScreen) {
-    return <HomeScreen onSelectScreen={setCurrentScreen} />;
+  
+  const renderScreen = () => {
+    // Nếu chưa chọn màn hình, hiển thị HomeScreen
+    if (!currentScreen) {
+      return <HomeScreen onSelectScreen={setCurrentScreen} />;
+    }
+  
+    // Hiển thị MenuScreen
+    if (currentScreen === "menu") {
+      return <MenuScreen />;
+    }
+  
+    // Hiển thị KitchenScreen
+    if (currentScreen === "kitchen") {
+      return <KitchenScreen />;
+    }
+    return null;
   }
 
-
-  // Hiển thị MenuScreen
-  if (currentScreen === "menu") {
-    return <MenuScreen />;
-  }
-
-  // Hiển thị KitchenScreen
-  if (currentScreen === "kitchen") {
-    return <KitchenScreen />;
-  }
-
-  return null;
+  return <div className="h-screen w-screen">{renderScreen()}</div>;
 }
 
 export default App;

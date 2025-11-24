@@ -3,6 +3,7 @@ import KitchenHeader from '../components/Kitchen/KitchenHeader';
 import OrdersGrid from '../components/Kitchen/OrdersGrid';
 import { MOCK_ORDERS } from '../components/Kitchen/mockData';
 
+const STATUS_OPTIONS = ['all', 'pending', 'cooking', 'completed', 'late', 'cancelled'];
 
 const KitchenScreen = () => {
   const [viewMode, setViewMode] = useState('card');
@@ -38,7 +39,6 @@ const KitchenScreen = () => {
   // Lọc orders
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
-      // Lấy trạng thái động (bao gồm late và warning)
       const actualStatus = getOrderStatus(order);
       const statusMatch = filterStatus === 'all' || actualStatus === filterStatus;
       const stationMatch = filterStation === 'all' || order.items.some(item => item.station === filterStation);
@@ -79,6 +79,7 @@ const KitchenScreen = () => {
         setFilterStation={setFilterStation}
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
+        statusOptions={STATUS_OPTIONS}
       />
 
       <div className="flex-1 p-6 overflow-y-auto">

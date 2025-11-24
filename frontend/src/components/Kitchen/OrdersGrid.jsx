@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle } from 'lucide-react';
-import OrderCard from './OrderCard';
+import OrderCard from '../OrderCard/OrderCard';
 
 const OrdersGrid = ({ 
   orders, 

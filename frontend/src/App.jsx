@@ -12,6 +12,7 @@ function App() {
     return <HomeScreen onSelectScreen={setCurrentScreen} />;
   }
 
+
   // Hiển thị MenuScreen
   if (currentScreen === "menu") {
     return <MenuScreen />;

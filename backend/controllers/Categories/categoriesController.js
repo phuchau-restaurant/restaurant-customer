@@ -1,12 +1,17 @@
 //backend/controllers/Categories/categoriesControllers.js
-import CategoriesService from "../../services/Categories/categoriesService.js";
+
+//Ko cần import - nhận service thông qua constructor: 
+  //ko cần: import CategoriesService from "../../services/Categories/categoriesService.js";
 
 // Thêm dòng này để kiểm tra ngay lập tức khi chạy server:
 //console.log('Loaded .env from:', envPath);
 
 class CategoriesController {
-
-  /**
+  //inject service vào controller thông qua constructor
+  constructor(categoriesService) {
+      this.categoriesService = categoriesService;
+    }
+  /** TODO: đưa hàm này vô middleware
    * Helper: Lấy Tenant ID từ Request
    * ------------------------------------------------
    * TRONG THỰC TẾ: TenantID nên được lấy từ JWT Token (req.user.tenant_id) sau khi qua Middleware xác thực.
@@ -29,33 +34,30 @@ class CategoriesController {
   }
 
   // [GET] /api/categories
-  async getAll(req, res) {
+  getAll = async (req, res) => {
     try {
-      const tenantId = this.getTenantId(req);
-      // Lấy tham số onlyActive từ query param (ví dụ: ?active=true)
+      // Gọi hàm helper nội bộ (dùng this.)
+      const tenantId = this.getTenantId(req); 
+      
       const onlyActive = req.query.active === 'true';
 
-      const data = await CategoriesService.getCategoriesByTenant(tenantId, onlyActive);
-      
-      return res.status(200).json({
-        success: true,
-        data: data
-      });
+      // Gọi Service
+      const data = await this.categoriesService.getCategoriesByTenant(tenantId, onlyActive); //sử dụng this vì tại constructor đã inject service vào this.categoriesService
+      return res.status(200).json({ success: true, data });
     } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      // Xử lý lỗi tập trung
+      //console.log("Something went wrong in getAll:", error);
+      return res.status(500).json({ success: false, message: error.message });
     }
   }
 
   // [GET] /api/categories/:id
-  async getById(req, res) {
+  getById = async (req, res) => {
     try {
       const tenantId = this.getTenantId(req);
       const { id } = req.params;
 
-      const data = await CategoriesService.getCategoryById(id, tenantId);
+      const data = await this.categoriesService.getCategoryById(id, tenantId);
 
       return res.status(200).json({
         success: true,
@@ -74,12 +76,11 @@ class CategoriesController {
   }
 
   // [POST] /api/categories
-  async create(req, res) {
+  create = async (req, res) => {
     try {
       const tenantId = this.getTenantId(req); // sẽ lấy tenant id từ Header (nếu như đang test API)
-      
       // Gọi Service
-      const newCategory = await CategoriesService.createCategory({
+      const newCategory = await this.categoriesService.createCategory({
         ...req.body,
         tenant_id: tenantId // Force tenant_id từ header/token, không tin tưởng body
       });
@@ -98,12 +99,12 @@ class CategoriesController {
   }
 
   // [PUT] /api/categories/:id
-  async update(req, res) {
+  update = async (req, res) => {
     try {
       const tenantId = this.getTenantId(req);
       const { id } = req.params;
 
-      const updatedCategory = await CategoriesService.updateCategory(id, tenantId, req.body);
+      const updatedCategory = await this.categoriesService.updateCategory(id, tenantId, req.body);
 
       return res.status(200).json({
         success: true,
@@ -119,12 +120,12 @@ class CategoriesController {
   }
 
   // [DELETE] /api/categories/:id
-  async delete(req, res) {
+  delete = async (req, res) => {
     try {
       const tenantId = this.getTenantId(req);
       const { id } = req.params;
 
-      await CategoriesService.deleteCategory(id, tenantId);
+      await this.categoriesService.deleteCategory(id, tenantId);
 
       return res.status(200).json({
         success: true,
@@ -139,5 +140,4 @@ class CategoriesController {
   }
 }
 
-// Export Singleton
-export default new CategoriesController();
+export default CategoriesController;

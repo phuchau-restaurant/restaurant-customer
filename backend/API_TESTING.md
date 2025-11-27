@@ -1,6 +1,4 @@
 # HOW TO TEST API - by Duong Nguyen
-
-Dưới đây là nội dung file `API_TESTING.md` được soạn thảo chuyên nghiệp, rõ ràng và nhấn mạnh vào yêu cầu đặc biệt về **Tenant ID** của bạn.
 -----
 
 ````markdown
@@ -111,6 +109,4 @@ Dưới đây là ví dụ để test API tạo mới Category.
     * Value: `{{tenant_id}}`
 
 Cách này giúp bạn chỉ cần sửa ID ở một chỗ nếu sau này muốn test sang nhà hàng khác.
-
-**Bạn có muốn tôi hướng dẫn chi tiết cách thiết lập Environment Variable này trong Thunder Client để gửi cho team không?**
 ```

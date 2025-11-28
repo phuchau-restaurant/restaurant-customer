@@ -17,7 +17,7 @@ export class CategoryRepository extends BaseRepository {
    */
 
   async create(data) {
-    // Chuyển đổi dữ liệu đầu vào thành Model
+    // Chuyển đổi dữ liệu đầu vào thành Model để sử dụng mapping ngược bằng toPersistence
     const categoryEntity = new Categories(data);
 
     // Chuyển đổi Model thành format của Database (toPersistence)
@@ -80,6 +80,13 @@ async getById(id) {
     const rawData = await super.getById(id); // Gọi cha lấy raw data
     return rawData ? new Categories(rawData) : null; // Map sang Model
 }
+
+  async getAll(filters = {}) {
+    // 1. Gọi cha để lấy dữ liệu thô từ DB (Snake_case)
+    const rawData = await super.getAll(filters);    
+    // 2. Map sang Model (CamelCase) để đồng bộ với toàn hệ thống
+    return rawData.map(item => new Categories(item));
+  }
  
 }
 // LƯU Ý QUAN TRỌNG:

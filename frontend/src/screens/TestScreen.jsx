@@ -38,6 +38,12 @@ const TestScreen = ({ onSelectScreen }) => {
           >
             Kitchen Screen
           </button>
+          <button
+            onClick={() => onSelectScreen("waiter")}
+            className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+          >
+            Waiter Screen
+          </button>
         </div>
       </div>
     </div>

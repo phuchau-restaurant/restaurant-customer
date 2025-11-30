@@ -6,6 +6,7 @@ import VerifyEmailScreen from "./screens/VerifyEmailScreen";
 import DashboardLayout from "./components/Dashboard/DashboardLayout";
 import MenuScreen from "./screens/MenuScreen";
 import KitchenScreen from "./screens/KitchenScreen";
+import WaiterScreen from "./screens/WaiterScreen";
 import TestScreen from "./screens/TestScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 
@@ -56,6 +57,11 @@ function App() {
     // Hiển thị KitchenScreen
     if (currentScreen === "kitchen") {
       return <KitchenScreen />;
+    }
+
+    // Hiển thị WaiterScreen
+    if (currentScreen === "waiter") {
+      return <WaiterScreen />;
     }
     return null;
   }

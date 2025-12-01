@@ -14,7 +14,12 @@ class MenusController {
 
       const data = await this.menusService.getMenusByTenant(tenantId, categoryId, onlyAvailable);
       
-      return res.status(200).json({ success: true, data });
+      return res.status(200).json({ 
+        success: true,
+        message: "Menus fetched successfully",
+        total: data.length,
+        data: data
+      });
     } catch (error) {
       next(error);
     }

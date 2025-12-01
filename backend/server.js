@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 // Import các routes
 import categoriesRoutes from './routers/categories.routes.js';
 import { connectDatabase } from './configs/database.js';
+import menusRoutes from './routers/menus.routes.js';
 
 //Import middlewares 
 import { errorMiddleware } from './middlewares/errorMiddleware.js';
@@ -35,6 +36,8 @@ app.use('/api/categories', categoriesRoutes);
 app.get('/', (req, res) => {
   res.send('🚀 Server is running...');
 });
+app.use('/api/menus', menusRoutes); 
+
 // --- ERROR HANDLING  ---
 // Nếu controller gọi next(error), nó sẽ nhảy thẳng xuống đây
 app.use(errorMiddleware);

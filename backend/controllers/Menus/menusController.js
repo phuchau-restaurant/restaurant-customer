@@ -32,7 +32,11 @@ class MenusController {
       const { id } = req.params;
       const data = await this.menusService.getMenuById(id, tenantId);
       
-      return res.status(200).json({ success: true, data });
+      return res.status(200).json({ 
+        success: true,
+        message: "Menu fetched successfully",
+        data: data
+      });
     } catch (error) {
       if (error.message.includes("not found")) error.statusCode = 404;
       else if (error.message.includes("Access denied")) error.statusCode = 403;

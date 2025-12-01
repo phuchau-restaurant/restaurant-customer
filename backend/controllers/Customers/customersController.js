@@ -55,6 +55,9 @@ class CustomersController {
     const { phoneNumber, fullName } = req.body; //must be body, not query or params
     try {
       const data = await this.customersService.findCustomerByPhoneNumber(tenantId, phoneNumber);
+      if (data.fullName !== fullName) {
+        throw new Error("Customer name does not match");
+      }
       return res.status(200).json({ 
             message: "Customer fetched successfully",
             success: true, 

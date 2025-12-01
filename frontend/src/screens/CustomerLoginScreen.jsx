@@ -33,6 +33,7 @@ const CustomerLoginScreen = ({ onSelectScreen }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
         },
         body: JSON.stringify({
           phoneNumber: phone,

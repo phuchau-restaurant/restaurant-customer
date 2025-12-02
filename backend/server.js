@@ -14,6 +14,8 @@ import usersRoutes from "./routers/users.routes.js";
 import authRoutes from "./routers/auth.routes.js";
 import menusRoutes from './routers/menus.routes.js';
 import customersRoutes from './routers/customers.routes.js';
+import ordersRoutes from './routers/orders.routes.js';
+import kitchenRoutes from './routers/kitchen.routes.js';
 
 
 //Import middlewares
@@ -41,6 +43,11 @@ app.use("/api/users", usersRoutes);
 app.use("/api/auth", authRoutes);
 app.use('/api/menus', menusRoutes); 
 app.use('/api/customers', customersRoutes);
+app.use('/api/orders', ordersRoutes);
+
+//route nghiệp vụ cho kitchen
+app.use('/api/kitchen', kitchenRoutes);
+
 // Route kiểm tra server sống hay chết
 app.get("/", (req, res) => {
   res.send("🚀 Server is running...");

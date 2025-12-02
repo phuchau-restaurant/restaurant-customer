@@ -99,7 +99,7 @@ const MenuScreen = () => {
   const submitOrder = async () => {
     try {
       const payload = {
-        tableId: 5,
+        tableId: 7,
         customerId: 1,
         dishes: cart.map(item => ({
           dishId: item.id,
@@ -112,7 +112,7 @@ const MenuScreen = () => {
 
       const response = await fetch("http://localhost:3000/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-tenant-id":"019abac9-846f-75d0-8dfd-bcf9c9457866" },
         body: JSON.stringify(payload),
       });
 

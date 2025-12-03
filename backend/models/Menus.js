@@ -8,7 +8,7 @@ export class Menus {
     this.name = data.name;
     this.description = data.description;
     this.price = data.price;
-    this.imgUrl = data.img_url || data.imgUrl;
+    this.imgUrl = data.image_url || data.imageUrl;
 
     // Đảm bảo isAvailable luôn là boolean hoặc undefined
     if (data.is_available !== undefined) this.isAvailable = data.is_available;

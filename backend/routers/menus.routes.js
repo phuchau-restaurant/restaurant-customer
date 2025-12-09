@@ -9,10 +9,10 @@ const router = express.Router();
 router.use(tenantMiddleware);
 
 // Định nghĩa routes
-router.get('/', menusController.getAll);
-router.get('/:id', menusController.getById);
+router.get('/', menusController.getAll); // GET api/menus?categoryId=<id>&available=true
+router.get('/:id', menusController.getById); //lấy một món ăn theo ID
 router.post('/', menusController.create);
 router.put('/:id', menusController.update);
-router.delete('/:id', menusController.delete);
+//router.delete('/:id', menusController.delete);
 
 export default router;

@@ -2,11 +2,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
-import {
-  ShoppingCart,
-  Utensils,
-  LogOut,
-} from "lucide-react";
+import { ShoppingCart, Utensils, LogOut } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 
@@ -33,31 +29,20 @@ const MenuScreen = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoryIdMap, setCategoryIdMap] = useState({}); // map category name to id
 
   // Fetch categories and menu
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tableIdFromUrl = params.get("tableId");
 
-    // Fetch table info
+    // Chỉ lấy tableId từ URL, không gọi API
     if (tableIdFromUrl) {
-      fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/tables/${tableIdFromUrl}`,
-        {
-          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-        }
-      )
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && json.data) {
-            updateTable({ id: json.data.id, number: json.data.tableNumber });
-          } else {
-            updateTable({ id: tableIdFromUrl, number: tableIdFromUrl });
-          }
-        })
-        .catch(() => {
-          updateTable({ id: tableIdFromUrl, number: tableIdFromUrl });
-        });
+      updateTable({ id: tableIdFromUrl, number: tableIdFromUrl });
+    } else {
+      // Không có tableId trong URL, dùng mặc định
+      console.warn("⚠️ Không có tableId trong URL, dùng bàn mặc định");
+      updateTable({ id: 1, number: "01" });
     }
 
     // Fetch categories
@@ -77,54 +62,78 @@ const MenuScreen = () => {
             {
               id: "all",
               name: "Tất cả",
-              iconUrl: null, // fallback to Utensils icon
+              iconUrl: null,
+              categoryId: null,
             },
           ];
+
+          const idMap = {};
 
           json.data
             .filter((cat) => cat.isActive)
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .forEach((cat) => {
+              const catId = cat.name.toLowerCase().replace(/\s+/g, "-");
               mappedCategories.push({
-                id: cat.name.toLowerCase().replace(/\s+/g, "-"),
+                id: catId,
                 name: cat.name,
                 iconUrl: cat.urlIcon,
+                categoryId: cat.id, // store API categoryId
               });
+              idMap[catId] = cat.id;
             });
 
           setCategories(mappedCategories);
+          setCategoryIdMap(idMap);
         }
       } catch (err) {
         console.error("❌ Lỗi fetch categories:", err);
         setCategories([
-          { id: "all", name: "Tất cả", iconUrl: null },
+          { id: "all", name: "Tất cả", iconUrl: null, categoryId: null },
         ]);
       }
     };
 
-    // Fetch menus
+    fetchCategories();
+  }, []);
+
+  // Fetch menus based on active category
+  useEffect(() => {
     const fetchMenus = async () => {
       try {
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/menus`,
-          {
-            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/menus`;
+        const url = new URL(baseUrl);
+
+        if (activeCategory !== "all") {
+          const categoryId = categoryIdMap[activeCategory];
+          if (categoryId) {
+            url.searchParams.append("categoryId", categoryId);
           }
-        );
+        }
+
+        const res = await fetch(url.toString(), {
+          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+        });
 
         const json = await res.json();
 
         if (!json.success) throw new Error("Lấy menu thất bại");
 
+        // Tìm category name từ categoryId
+        const getCategoryNameById = (catId) => {
+          const found = categories.find((c) => c.categoryId === catId);
+          return found ? found.id : activeCategory;
+        };
+
         const mapped = json.data.map((item, index) => ({
-          id: index + 1,
+          id: item.id || index + 1,
           name: item.name,
           description: item.description || "Không có mô tả",
           price: item.price,
-          category:
-            item.categoryName?.toLowerCase().replace(/\s+/g, "-") ||
-            "appetizers",
+          // Dùng categoryId từ API response để map về category id string
+          category: getCategoryNameById(item.categoryId),
           imgUrl: item.imgUrl,
+          isAvailable: item.isAvailable,
         }));
 
         setProducts(mapped);
@@ -133,9 +142,13 @@ const MenuScreen = () => {
       }
     };
 
-    fetchCategories();
-    fetchMenus();
-  }, []);
+    // Chỉ gọi API khi:
+    // 1. Đang chọn "all"
+    // 2. HOẶC đang chọn danh mục khác VÀ đã load xong danh sách ID (categoryIdMap có dữ liệu)
+    if (activeCategory === "all" || categoryIdMap[activeCategory]) {
+      fetchMenus();
+    }
+  }, [activeCategory, categoryIdMap, categories]);
 
   // Submit order (giữ nguyên)
   const submitOrder = async () => {
@@ -197,13 +210,6 @@ const MenuScreen = () => {
 
   // hiển thị customer từ context hoặc default
   const displayCustomer = customer || defaultCustomer;
-
-  // 🟠 Filter theo category
-  const filteredProducts = useMemo(() => {
-    return activeCategory === "all"
-      ? products
-      : products.filter((p) => p.category === activeCategory);
-  }, [activeCategory, products]);
 
   // Cart actions
   const addToCart = (product) => {
@@ -337,7 +343,7 @@ const MenuScreen = () => {
         </header>
 
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr pb-6">
-          {filteredProducts.map((product) => (
+          {products.map((product) => (
             <MenuItem
               key={product.id}
               product={product}
@@ -408,7 +414,6 @@ const MenuScreen = () => {
             ))
           )}
         </div>
-
 
         <div className="p-6 bg-gray-50 border-t">
           <div className="flex justify-between items-center mb-4">

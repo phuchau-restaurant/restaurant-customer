@@ -72,7 +72,7 @@ const CustomerLoginScreen = () => {
 
       // chuyển sang menu
       //Mai mốt đổi tableId thành quét QR code
-      navigate("/customer/menu?tableId=2");
+      navigate("/customer/menu?tableId=7");
     } catch (error) {
       console.error("Login error:", error);
       alert("Không thể kết nối server!");

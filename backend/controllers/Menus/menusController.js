@@ -1,11 +1,12 @@
 // backend/controllers/Menus/menusController.js
 
 class MenusController {
-  constructor(menusService) {
+  constructor(menusService, categoriesService) {
     this.menusService = menusService;
+    this.categoriesService = categoriesService;
   }
 
-  // [GET] /api/menus
+  // [GET] /api/menus/?categoryId=<id>&available=true
   getAll = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
@@ -19,10 +20,16 @@ class MenusController {
           const { id, tenantId, ...rest } = item; 
           return rest; 
       });
-
+      //Nếu có categoryId được truyền vào thì lấy nó và search, nếu không thì null
+      //const categoryName = categoryId ? this.categoriesService.getCategoryById(categoryId)?.name + ' category' : '';
+      let categoryName = '';
+      if (categoryId){
+        const category = await this.categoriesService.getCategoryById(categoryId, tenantId);
+        categoryName = category.name + ' category';
+      }
       return res.status(200).json({ 
         success: true,
-        message: "Menus fetched successfully",
+        message: `Menus fetched ${categoryName} successfully`,
         total: returnData.length,
         data: returnData
       });

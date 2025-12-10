@@ -11,15 +11,6 @@ const defaultCustomer = {
   loyaltyPoints: 0,
 };
 
-const FALLBACK_AVATARS = [
-  "/images/avatar/avt1.svg",
-  "/images/avatar/avt2.svg",
-  "/images/avatar/avt3.svg",
-  "/images/avatar/avt4.svg",
-  "/images/avatar/avt5.svg",
-  "/images/avatar/avt6.svg",
-];
-
 const MenuScreen = () => {
   const navigate = useNavigate();
   const { customer, tableInfo, logout, updateTable } = useCustomer();
@@ -29,7 +20,8 @@ const MenuScreen = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [categoryIdMap, setCategoryIdMap] = useState({}); // map category name to id
+  const [categoryIdMap, setCategoryIdMap] = useState({});
+  const [avatarUrl, setAvatarUrl] = useState([]);
 
   // Fetch categories and menu
   useEffect(() => {
@@ -61,7 +53,7 @@ const MenuScreen = () => {
           const mappedCategories = [
             {
               id: "0",
-              name: "Tất cả",
+              name: "All",
               iconUrl: null,
               categoryId: null,
             },
@@ -94,11 +86,67 @@ const MenuScreen = () => {
       }
     };
 
+    const fetchUrlAvatar = async () => {
+      try {
+        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/appsettings`;
+        const url = new URL(baseUrl);
+
+        const res = await fetch(url.toString(), {
+          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+        });
+
+        const json = await res.json();
+        if (!json.success) throw new Error("Lấy app settings thất bại");
+
+        // Lọc và map thành mảng URL
+        const avatarSettings = json.data
+          .filter((setting) => setting.category === "avatar")
+          .map((setting) => setting.value);
+
+        setAvatarUrl(avatarSettings);
+      } catch (err) {
+        console.error("❌ Lỗi fetch avatar:", err);
+      }
+    };
+
+    // Fetch menu lần đầu tiên khi mount
+    const fetchInitialMenus = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_BACKEND_URL}/api/menus`,
+          {
+            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+          }
+        );
+
+        const json = await res.json();
+        if (json.success) {
+          const mapped = json.data.map((item, index) => ({
+            id: item.id || index + 1,
+            name: item.name,
+            description: item.description || "Không có mô tả",
+            price: item.price,
+            category: "0", // Default category for initial load
+            imgUrl: item.imgUrl,
+            isAvailable: item.isAvailable,
+          }));
+          setProducts(mapped);
+        }
+      } catch (err) {
+        console.error("❌ Lỗi fetch initial menus:", err);
+      }
+    };
+
+    fetchUrlAvatar();
     fetchCategories();
+    fetchInitialMenus();
   }, []);
 
   // Fetch menus based on active category
   useEffect(() => {
+    // Bỏ qua lần render đầu tiên (activeCategory = "all")
+    if (activeCategory === "all") return;
+
     const fetchMenus = async () => {
       try {
         const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/menus`;
@@ -187,7 +235,7 @@ const MenuScreen = () => {
         throw new Error(result.message || "Gửi đơn hàng thất bại");
       }
 
-      alert("🎉 Đặt món thành công!");
+      alert("Đặt món thành công!");
       setCart([]);
       setIsCartOpen(false);
     } catch (err) {
@@ -202,9 +250,10 @@ const MenuScreen = () => {
   };
 
   const randomAvatar = useMemo(() => {
-    const index = Math.floor(Math.random() * FALLBACK_AVATARS.length);
-    return FALLBACK_AVATARS[index];
-  }, []);
+    if (avatarUrl.length === 0) return "/images/avatar/default_avt.svg";
+    const index = Math.floor(Math.random() * avatarUrl.length);
+    return avatarUrl[index];
+  }, [avatarUrl]);
 
   // hiển thị customer từ context hoặc default
   const displayCustomer = customer || defaultCustomer;

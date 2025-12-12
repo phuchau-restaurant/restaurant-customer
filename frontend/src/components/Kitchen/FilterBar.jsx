@@ -29,7 +29,7 @@ const FilterBar = ({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex gap-3">
       {/* Thanh tìm kiếm */}
       <div className="relative w-full">
         <input
@@ -45,7 +45,7 @@ const FilterBar = ({
       {/* 2 Dropdown lọc - bên phải */}
       <div className="flex gap-3 justify-center">
       {/* Loại món Dropdown */}
-      <div className="relative w-56">
+      <div className="relative w-45">
         <button
           onClick={() => {
             setShowStationDropdown(!showStationDropdown);
@@ -85,7 +85,7 @@ const FilterBar = ({
       </div>
 
       {/* Tình trạng đơn Dropdown */}
-      <div className="relative w-56">
+      <div className="relative w-40">
         <button
           onClick={() => {
             setShowStatusDropdown(!showStatusDropdown);

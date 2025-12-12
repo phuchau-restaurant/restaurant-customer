@@ -15,7 +15,6 @@ class AuthController {
       const { email, password } = req.body;
       const tenantId = req.tenantId;
 
-
       // Gọi Service để xác thực
       const user = await this.authService.login(email, password, tenantId);
 

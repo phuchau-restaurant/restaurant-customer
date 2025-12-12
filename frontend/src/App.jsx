@@ -2,6 +2,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { CustomerProvider } from "./contexts/CustomerContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 import HomeScreen from "./screens/HomeScreen";
 import Register from "./screens/RegisterScreen";
 import VerifyEmailScreen from "./screens/VerifyEmailScreen";
@@ -42,10 +43,40 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmailScreen />} />
           <Route path="/onboarding" element={<OnboardingScreen />} />
-          <Route path="/dashboard" element={<DashboardLayout />} />
-          <Route path="/test" element={<TestScreen />} />
-          <Route path="/kitchen" element={<KitchenScreen />} />
-          <Route path="/waiter" element={<WaiterScreen />} />
+
+          {/* Protected Routes - Yêu cầu đăng nhập */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/test"
+            element={
+              <ProtectedRoute>
+                <TestScreen />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/kitchen"
+            element={
+              <ProtectedRoute>
+                <KitchenScreen />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/waiter"
+            element={
+              <ProtectedRoute>
+                <WaiterScreen />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="*" element={<Navigate to="/customer/login" replace />} />
         </Routes>

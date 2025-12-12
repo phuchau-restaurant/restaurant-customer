@@ -8,11 +8,6 @@ export class Users {
     this.fullName = data.full_name || data.fullName;
     this.role = data.role;
     this.passwordHash = data.password_hash || data.passwordHash;
-
-    // Thêm các trường cho việc reset password
-    this.passwordResetToken = data.password_reset_token || data.passwordResetToken;
-    this.passwordResetExpires = data.password_reset_expires || data.passwordResetExpires;
-
     this.isActive = data.is_active !== undefined ? data.is_active : data.isActive;
 
   }
@@ -30,8 +25,6 @@ export class Users {
       is_active: this.isActive,
       password_hash: this.passwordHash,
       role: this.role,
-      password_reset_token: this.passwordResetToken,
-      password_reset_expires: this.passwordResetExpires,
     };
   }
 }

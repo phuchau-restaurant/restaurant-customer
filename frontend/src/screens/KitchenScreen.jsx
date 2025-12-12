@@ -2,13 +2,28 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import KitchenHeader from "../components/Kitchen/KitchenHeader";
 import OrdersGrid from "../components/Kitchen/OrdersGrid";
 
+// Map trạng thái từ tiếng Anh sang tiếng Việt
+const STATUS_MAP = {
+  Pending: "Chờ xử lý",
+  Cooking: "Đang nấu",
+  Completed: "Hoàn thành",
+  Cancelled: "Đã hủy",
+};
+
+// Options cho dropdown status (hiển thị tiếng Việt)
 const STATUS_OPTIONS = [
-  "all",
-  "pending",
-  "cooking",
-  "completed",
-  "late",
-  "cancelled",
+  { value: "all", label: "Tất cả trạng thái" },
+  { value: "Pending", label: "Chờ xử lý" },
+  { value: "Completed", label: "Hoàn thành" },
+  { value: "Cancelled", label: "Đã hủy" },
+];
+
+// Options cho dropdown category (hiển thị tiếng Việt)
+const CATEGORY_OPTIONS = [
+  { value: "all", label: "Tất cả loại món" },
+  { value: "1", label: "Khai vị" },
+  { value: "2", label: "Đồ uống" },
+  { value: "3", label: "Món chính" },
 ];
 
 const KitchenScreen = () => {
@@ -31,20 +46,13 @@ const KitchenScreen = () => {
 
         // Add status filter (nếu không phải "all")
         if (filterStatus !== "all") {
-          // Map UI status to API status
-          const statusMap = {
-            pending: "Pending",
-            cooking: "Cooking",
-            completed: "Completed",
-            cancelled: "Cancelled",
-            late: "Pending", // Late orders are still pending
-          };
-          params.append("status", statusMap[filterStatus] || filterStatus);
+          // filterStatus đã là giá trị tiếng Anh (Pending, Cooking, etc.)
+          params.append("status", filterStatus);
         }
 
         // Add category filter (nếu không phải "all")
         if (filterStation !== "all") {
-          // Giả sử filterStation là categoryId
+          // filterStation đã là giá trị tiếng Anh (Appetizers, Beverage, etc.)
           params.append("categoryId", filterStation);
         }
 
@@ -60,18 +68,42 @@ const KitchenScreen = () => {
         const data = await res.json();
         console.log("Kitchen orders API response:", data); // Debug: xem response từ API
 
-
         if (data.success) {
           // Map API data to component format
-          const mappedOrders = data.data.map((order) => ({
-            id: order.orderId,
-            orderNumber: order.orderId,
-            tableNumber: order.tableId,
-            orderTime: new Date(order.createdAt),
-            items: order.dishes || [],
-            customerName: order.customerName || "Khách",
-            notes: order.note || "",
-          }));
+          const mappedOrders = data.data.map((order) => {
+            // Determine order status based on dishes
+            const allDishes = order.dishes || [];
+            let orderStatus = "Pending";
+            if (allDishes.every((d) => d.status === "Completed")) {
+              orderStatus = "Completed";
+            } else if (allDishes.some((d) => d.status === "Cooking")) {
+              orderStatus = "Cooking";
+            } else if (allDishes.every((d) => d.status === "Cancelled")) {
+              orderStatus = "Cancelled";
+            }
+
+            return {
+              id: order.orderId,
+              orderNumber: order.orderId,
+              tableNumber: order.tableId,
+              orderTime: new Date(order.createdAt),
+              status: orderStatus,
+              items: allDishes.map((dish) => ({
+                id: dish.dishId,
+                dishId: dish.dishId,
+                name: dish.name,
+                quantity: dish.quantity,
+                note: dish.note || "",
+                status: dish.status,
+                categoryId: dish.categoryId,
+                image: dish.image,
+                completed: dish.status === "Completed",
+              })),
+              customerName: order.customerName || "Khách",
+              notes: order.note || "",
+            };
+          });
+          console.log("Mapped orders:", mappedOrders); // Debug
           setOrders(mappedOrders);
         }
       } catch (error) {
@@ -118,28 +150,26 @@ const KitchenScreen = () => {
     [getElapsedTime]
   );
 
-  // Lọc orders
+  // Lọc orders (chỉ filter search vì status và category đã được filter ở API)
   const filteredOrders = useMemo(() => {
-    return orders
+    const filtered = orders
       .filter((order) => {
         // Tìm kiếm theo orderNumber
         if (
           searchOrderId &&
-          !order.orderNumber.toLowerCase().includes(searchOrderId.toLowerCase())
+          !String(order.orderNumber)
+            .toLowerCase()
+            .includes(searchOrderId.toLowerCase())
         ) {
           return false;
         }
-
-        const actualStatus = getOrderStatus(order);
-        const statusMatch =
-          filterStatus === "all" || actualStatus === filterStatus;
-        const stationMatch =
-          filterStation === "all" ||
-          order.items.some((item) => item.station === filterStation);
-        return statusMatch && stationMatch;
+        return true;
       })
       .sort((a, b) => a.orderTime - b.orderTime);
-  }, [orders, filterStation, filterStatus, searchOrderId, getOrderStatus]);
+
+    console.log("Filtered orders:", filtered); // Debug
+    return filtered;
+  }, [orders, searchOrderId]);
 
   // Actions
   const handleStart = (orderId) => {
@@ -220,6 +250,7 @@ const KitchenScreen = () => {
         searchOrderId={searchOrderId}
         setSearchOrderId={setSearchOrderId}
         statusOptions={STATUS_OPTIONS}
+        categoryOptions={CATEGORY_OPTIONS}
       />
 
       <div className="flex-1 p-6 overflow-y-auto">

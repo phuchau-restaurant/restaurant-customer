@@ -12,6 +12,8 @@ const KitchenHeader = ({
   setFilterStatus,
   searchOrderId,
   setSearchOrderId,
+  statusOptions,
+  categoryOptions,
 }) => {
   return (
     <div className="bg-linear-to-r from-orange-50 via-amber-50 to-yellow-50 shadow-md border-b-4 border-orange-400 sticky top-0 z-50">
@@ -30,7 +32,7 @@ const KitchenHeader = ({
           </div>
 
           {/* Filters */}
-          <div className="flex-1 max-w-2xl">
+          <div className="flex-1 max-w-[900px]">
             <FilterBar
               filterStation={filterStation}
               setFilterStation={setFilterStation}
@@ -38,6 +40,8 @@ const KitchenHeader = ({
               setFilterStatus={setFilterStatus}
               searchOrderId={searchOrderId}
               setSearchOrderId={setSearchOrderId}
+              statusOptions={statusOptions}
+              categoryOptions={categoryOptions}
             />
           </div>
 

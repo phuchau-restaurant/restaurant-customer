@@ -172,34 +172,135 @@ const KitchenScreen = () => {
   }, [orders, searchOrderId]);
 
   // Actions
-  const handleStart = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, status: "cooking", startTime: new Date() }
-          : o
-      )
-    );
+  const handleStart = async (orderId) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/orders/${orderId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+          body: JSON.stringify({ status: "Cooking" }),
+        }
+      );
+
+      const data = await res.json();
+      if (data.success) {
+        // Update local state
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, status: "Cooking", startTime: new Date() }
+              : o
+          )
+        );
+      } else {
+        console.error("Failed to update order status:", data.message);
+        alert("Không thể cập nhật trạng thái đơn hàng");
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      alert("Lỗi khi cập nhật trạng thái đơn hàng");
+    }
   };
 
-  const handleComplete = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, status: "completed", completeTime: new Date() }
-          : o
-      )
-    );
+  const handleComplete = async (orderId) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/orders/${orderId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+          body: JSON.stringify({ status: "Completed" }),
+        }
+      );
+
+      const data = await res.json();
+      if (data.success) {
+        // Update local state
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, status: "Completed", completeTime: new Date() }
+              : o
+          )
+        );
+      } else {
+        console.error("Failed to update order status:", data.message);
+        alert("Không thể cập nhật trạng thái đơn hàng");
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      alert("Lỗi khi cập nhật trạng thái đơn hàng");
+    }
   };
 
-  const handleCancel = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "cancelled" } : o))
-    );
+  const handleCancel = async (orderId) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/orders/${orderId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+          body: JSON.stringify({ status: "Cancelled" }),
+        }
+      );
+
+      const data = await res.json();
+      if (data.success) {
+        // Update local state
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId ? { ...o, status: "Cancelled" } : o
+          )
+        );
+      } else {
+        console.error("Failed to update order status:", data.message);
+        alert("Không thể hủy đơn hàng");
+      }
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      alert("Lỗi khi hủy đơn hàng");
+    }
   };
 
-  const handleRecall = (orderId) => {
-    alert(`Đã gọi nhân viên phục vụ đến lấy món - Đơn ${orderId}`);
+  const handleRecall = async (orderId) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/orders/${orderId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+          body: JSON.stringify({ status: "Served" }),
+        }
+      );
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`Đã gọi nhân viên phục vụ đến lấy món - Đơn ${orderId}`);
+        // Update local state
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: "Served" } : o))
+        );
+      } else {
+        console.error("Failed to update order status:", data.message);
+        alert("Không thể cập nhật trạng thái đơn hàng");
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      alert("Lỗi khi cập nhật trạng thái đơn hàng");
+    }
   };
 
   const handleCompleteItem = (orderId, itemId) => {

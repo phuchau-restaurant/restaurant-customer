@@ -17,6 +17,7 @@ import customersRoutes from './routers/customers.routes.js';
 import ordersRoutes from './routers/orders.routes.js';
 import kitchenRoutes from './routers/kitchen.routes.js';
 import appSettingsRoutes from './routers/appSettings.routes.js';
+import adminRoutes from './routers/admin.routes.js';
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -45,6 +46,7 @@ app.use('/api/menus', menusRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/appsettings', appSettingsRoutes); 
+app.use('/api/admin', adminRoutes); 
 
 //route nghiệp vụ cho kitchen
 app.use('/api/kitchen', kitchenRoutes);

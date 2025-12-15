@@ -50,6 +50,8 @@ app.use('/api/admin', adminRoutes);
 
 //route nghiệp vụ cho kitchen
 app.use('/api/kitchen', kitchenRoutes);
+//Nghiệp vụ cho admin
+app.use('/api/admin', adminRoutes);
 
 // Route kiểm tra server sống hay chết
 app.get("/", (req, res) => {

@@ -80,24 +80,24 @@ export class TablesRepository extends BaseRepository {
     return data && data.length > 0 ? new Tables(data[0]) : null;
   }
 
-  // /** - Ko cần cho lắm vì id (khóa chính) là duy nhất rồi
-  //  * Lấy table theo tenant_id và table_id
-  //  */
-  // async getByIdAndTenant(id, tenantId) {
-  //   const { data, error } = await supabase
-  //     .from(this.tableName)
-  //     .select("*")
-  //     .eq("id", id)
-  //     .eq("tenant_id", tenantId)
-  //     .single();
+  /** - Ko cần cho lắm vì id (khóa chính) là duy nhất rồi
+   * Lấy table theo tenant_id và table_id
+   */
+  async getByIdAndTenant(id, tenantId) {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .single();
 
-  //   if (error && error.code !== "PGRST116") {
-  //     throw new Error(
-  //       `[${this.tableName}] GetByIdAndTenant failed: ${error.message}`
-  //     );
-  //   }
-  //   return data ? new Tables(data) : null;
-  // }
+    if (error && error.code !== "PGRST116") {
+      throw new Error(
+        `[${this.tableName}] GetByIdAndTenant failed: ${error.message}`
+      );
+    }
+    return data ? new Tables(data) : null;
+  }
 
   /**
    * Cập nhật thông tin QR code cho bàn

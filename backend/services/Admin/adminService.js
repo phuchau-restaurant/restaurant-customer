@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
 import PDFDocument from "pdfkit";
+import archiver from "archiver";
 
 const QR_SECRET = process.env.QR_SECRET || "qr-secret-key"; // TODO: Set in .env
 const QR_EXPIRE_DAYS = parseInt(process.env.QR_EXPIRE_DAYS) || 365; // Mặc định 1 năm
@@ -236,7 +237,7 @@ export default class AdminService {
     return {
       buffer,
       contentType: "image/png",
-      filename: `table-${table.tableNumber}-qr.png`,
+      filename: `qr-table-${table.tableNumber}.png`,
     };
   }
 
@@ -270,7 +271,7 @@ export default class AdminService {
           resolve({
             buffer: pdfBuffer,
             contentType: "application/pdf",
-            filename: `table-${table.tableNumber}-qr.pdf`,
+            filename: `qr-table-${table.tableNumber}.pdf`,
           });
         });
 
@@ -330,5 +331,73 @@ export default class AdminService {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Download tất cả QR code của tất cả bàn trong 1 ZIP
+   * @param {string} tenantId - ID của tenant
+   * @param {string} format - 'png', 'pdf', hoặc 'all'
+   * @returns {Object} - Stream và metadata để download
+   */
+  async downloadAllTableQR(tenantId, format = "all") {
+    try {
+      // 1. Lấy tất cả bàn có qr_token của tenant
+      const tables = await this.tablesRepository.getAllByTenantWithQR(tenantId);
+
+      if (!tables || tables.length === 0) {
+        const error = new Error(
+          "No tables with QR codes found. Please generate QR codes first."
+        );
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // 2. Tạo archive
+      const archive = archiver("zip", {
+        zlib: { level: 9 }, // Compression level
+      });
+
+      // 3. Generate QR cho từng bàn và add vào ZIP
+      for (const table of tables) {
+        // Tạo URL từ qr_token
+        const tokenPayload = {
+          tableId: table.id,
+          tenantId: tenantId,
+          qrToken: table.qrToken,
+          createdAt: table.qrTokenCreatedAt,
+        };
+
+        const jwtToken = jwt.sign(tokenPayload, QR_SECRET, {
+          expiresIn: `${QR_EXPIRE_DAYS}d`,
+        });
+
+        const customerLoginUrl = `${FRONTEND_URL}/customer/login?token=${jwtToken}`;
+
+        // Generate theo format
+        if (format === "png" || format === "all") {
+          const pngResult = await this._generateQRPNG(table, customerLoginUrl);
+          archive.append(pngResult.buffer, { name: pngResult.filename });
+        }
+
+        if (format === "pdf" || format === "all") {
+          const pdfResult = await this._generateQRPDF(table, customerLoginUrl);
+          archive.append(pdfResult.buffer, { name: pdfResult.filename });
+        }
+      }
+
+      // Tạo filename phù hợp
+      let filename = "qr-codes-all-tables";
+      if (format === "png") filename += "-png";
+      else if (format === "pdf") filename += "-pdf";
+      filename += ".zip";
+
+      return {
+        archive,
+        filename,
+      };
+    } catch (error) {
+      if (!error.statusCode) error.statusCode = 500;
+      throw error;
+    }
   }
 }

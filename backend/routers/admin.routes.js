@@ -15,6 +15,9 @@ router.post("/tables/:id/qr/generate", adminController.generateTableQR);
 // Download QR code (PNG hoặc PDF)
 router.get("/tables/:id/qr/download", adminController.downloadTableQR);
 
+// Download tất cả QR codes (ZIP chứa PNG + PDF)
+router.get("/tables/qr/download-all", adminController.downloadAllTableQR);
+
 // Xác thực QR token (public route cho customer)
 router.post("/qr/verify", adminController.verifyQRToken);
 

@@ -69,4 +69,23 @@ export class TablesRepository extends BaseRepository {
     const raw = await super.create(table.toPersistence());
     return raw ? new Tables(raw) : null;
   }
+
+  /**
+   * Lấy tất cả bàn theo tenant có qr_token
+   */
+  async getAllByTenantWithQR(tenantId) {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .not("qr_token", "is", null)
+      .order("table_number", { ascending: true });
+
+    if (error) {
+      throw new Error(
+        `[${this.tableName}] GetAllByTenantWithQR failed: ${error.message}`
+      );
+    }
+    return data ? data.map((row) => new Tables(row)) : [];
+  }
 }

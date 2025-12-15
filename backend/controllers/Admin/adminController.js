@@ -93,4 +93,48 @@ export default class AdminController {
       next(error);
     }
   };
+
+  /**
+   * Download tất cả QR codes (ZIP)
+   * GET /admin/tables/qr/download-all?format=png|pdf|all
+   */
+  downloadAllTableQR = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId; // Từ tenantMiddleware
+      const format = req.query.format || "all"; // Mặc định cả PNG và PDF
+
+      // Validate format
+      if (!["png", "pdf", "all"].includes(format.toLowerCase())) {
+        const error = new Error("Invalid format. Use 'png', 'pdf', or 'all'");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // Gọi service để tạo ZIP
+      const result = await this.adminService.downloadAllTableQR(
+        tenantId,
+        format.toLowerCase()
+      );
+
+      // Set headers
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${result.filename}"`
+      );
+
+      // Handle archive events
+      result.archive.on("error", (err) => {
+        next(err);
+      });
+
+      // Pipe archive data to response
+      result.archive.pipe(res);
+
+      // Finalize the archive
+      result.archive.finalize();
+    } catch (error) {
+      next(error);
+    }
+  };
 }

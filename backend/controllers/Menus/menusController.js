@@ -6,7 +6,7 @@ class MenusController {
     this.categoriesService = categoriesService;
   }
 
-  // [GET] /api/menus/?token=xxx&categoryId=<id>&available=true
+  // [GET] /api/menus/?categoryId=<id>&available=true
   getAll = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
@@ -35,29 +35,18 @@ class MenusController {
         categoryName = category.name + " category";
       }
 
-      // Thêm thông tin bàn nếu có QR token
-      const responseData = {
+      return res.status(200).json({
         success: true,
         message: `Menus fetched ${categoryName} successfully`,
         total: returnData.length,
         data: returnData,
-      };
-
-      // Nếu request từ customer (có qrToken), thêm thông tin bàn
-      if (req.qrToken) {
-        responseData.table = {
-          tableNumber: req.qrToken.tableNumber,
-          tableId: req.qrToken.tableId,
-        };
-      }
-
-      return res.status(200).json(responseData);
+      });
     } catch (error) {
       next(error);
     }
   };
 
-  // [GET] /api/menus/:id?token=xxx
+  // [GET] /api/menus/:id
   getById = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
@@ -67,21 +56,11 @@ class MenusController {
       // Lọc bỏ id và tenantId
       const { id: _id, tenantId: _tid, ...returnData } = data;
 
-      const responseData = {
+      return res.status(200).json({
         success: true,
         message: "Menu fetched successfully",
         data: returnData,
-      };
-
-      // Nếu request từ customer (có qrToken), thêm thông tin bàn
-      if (req.qrToken) {
-        responseData.table = {
-          tableNumber: req.qrToken.tableNumber,
-          tableId: req.qrToken.tableId,
-        };
-      }
-
-      return res.status(200).json(responseData);
+      });
     } catch (error) {
       if (error.message.includes("not found")) error.statusCode = 404;
       else if (error.message.includes("Access denied")) error.statusCode = 403;

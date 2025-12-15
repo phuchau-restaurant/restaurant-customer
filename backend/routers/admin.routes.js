@@ -5,7 +5,10 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Bắt buộc có TenantID và phải đăng nhập
+// Xác thực QR token (public route cho customer - KHÔNG CẦN AUTH)
+router.post("/qr/verify", adminController.verifyQRToken);
+
+// Bắt buộc có TenantID và phải đăng nhập cho các routes còn lại
 router.use(tenantMiddleware);
 router.use(authMiddleware);
 
@@ -17,8 +20,5 @@ router.get("/tables/:id/qr/download", adminController.downloadTableQR);
 
 // Download tất cả QR codes (ZIP chứa PNG + PDF)
 router.get("/tables/qr/download-all", adminController.downloadAllTableQR);
-
-// Xác thực QR token (public route cho customer)
-router.post("/qr/verify", adminController.verifyQRToken);
 
 export default router;

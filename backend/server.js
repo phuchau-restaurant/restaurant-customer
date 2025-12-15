@@ -17,6 +17,7 @@ import customersRoutes from './routers/customers.routes.js';
 import ordersRoutes from './routers/orders.routes.js';
 import kitchenRoutes from './routers/kitchen.routes.js';
 import appSettingsRoutes from './routers/appSettings.routes.js';
+import adminRoutes from './routers/admin.routes.js';
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -48,6 +49,8 @@ app.use('/api/appsettings', appSettingsRoutes);
 
 //route nghiệp vụ cho kitchen
 app.use('/api/kitchen', kitchenRoutes);
+//Nghiệp vụ cho admin
+app.use('/api/admin', adminRoutes);
 
 // Route kiểm tra server sống hay chết
 app.get("/", (req, res) => {

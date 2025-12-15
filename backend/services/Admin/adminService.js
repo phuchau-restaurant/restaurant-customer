@@ -114,18 +114,8 @@ export default class AdminService {
    */
   async verifyQRToken(token) {
     try {
-      // Xác minh JWT token
+      // Xác minh JWT token (JWT tự động kiểm tra expiration bằng 'exp' claim)
       const decoded = jwt.verify(token, QR_SECRET);
-
-      // Kiểm tra token đã hết hạn chưa
-      const now = new Date();
-      const expiresAt = new Date(decoded.expiresAt);
-
-      if (now > expiresAt) {
-        const error = new Error("QR code has expired");
-        error.statusCode = 401;
-        throw error;
-      }
 
       // Kiểm tra bàn và token còn hợp lệ
       const table = await this.tablesRepository.getByIdAndTenant(

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
+import { motion } from "framer-motion";
 import {
   Utensils,
   Phone,
@@ -10,11 +11,16 @@ import {
   Coffee,
   Cookie,
   UtensilsCrossed,
+  ChefHat,
+  Pizza,
 } from "lucide-react";
+import AlertModal from "../components/Modal/AlertModal";
+import { useAlert } from "../hooks/useAlert";
 
 const CustomerLoginScreen = () => {
   const navigate = useNavigate();
   const { login, updateTable } = useCustomer();
+  const { alert, showError, showWarning, closeAlert } = useAlert();
 
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
@@ -23,24 +29,32 @@ const CustomerLoginScreen = () => {
   const [tableInfo, setTableInfo] = useState(null);
   const [tokenVerified, setTokenVerified] = useState(false);
 
-  // Verify QR token khi component mount (BẮT BUỘC PHẢI CÓ TOKEN)
+  // --- LOGIC GIỮ NGUYÊN ---
   React.useEffect(() => {
+    let timeoutId;
+
     const verifyQRToken = async () => {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
 
-      // BẮT BUỘC phải có token trong URL - không cho phép truy cập trực tiếp
       if (!token) {
-        alert("⚠️ Vui lòng quét mã QR để truy cập!");
-        navigate("/");
+        showWarning("Vui lòng quét mã QR để truy cập!");
+        setTimeout(() => navigate("/"), 2000);
         return;
       }
 
-      // Nếu đã verify token này rồi, bỏ qua
       const storedToken = localStorage.getItem("qrToken");
       if (storedToken === token && tokenVerified) {
         return;
       }
+
+      timeoutId = setTimeout(() => {
+        if (!tokenVerified) {
+          setIsLoading(false);
+          showError("Xác thực QR code quá lâu! Vui lòng quét lại mã QR.");
+          setTimeout(() => navigate("/"), 2000);
+        }
+      }, 10000);
 
       try {
         setIsLoading(true);
@@ -58,12 +72,13 @@ const CustomerLoginScreen = () => {
         const data = await response.json();
 
         if (!response.ok) {
-          alert(data.message || "QR code không hợp lệ hoặc đã hết hạn!");
-          navigate("/");
+          clearTimeout(timeoutId);
+          showError(data.message || "QR code không hợp lệ hoặc đã hết hạn!");
+          setTimeout(() => navigate("/"), 2000);
           return;
         }
 
-        // Lưu thông tin bàn, token và tenantId
+        clearTimeout(timeoutId);
         setTableInfo(data.data);
         updateTable({
           id: data.data.tableId,
@@ -71,22 +86,28 @@ const CustomerLoginScreen = () => {
         });
         localStorage.setItem("qrToken", token);
         localStorage.setItem("tableInfo", JSON.stringify(data.data));
-        localStorage.setItem("tenantId", data.data.tenantId); // Lưu tenantId để dùng cho các API call
+        localStorage.setItem("tenantId", data.data.tenantId);
         setTokenVerified(true);
       } catch (error) {
+        clearTimeout(timeoutId);
         console.error("QR verify error:", error);
-        alert("Không thể xác thực QR code!");
-        navigate("/");
+        showError("Không thể xác thực QR code!");
+        setTimeout(() => navigate("/"), 2000);
       } finally {
         setIsLoading(false);
       }
     };
 
     verifyQRToken();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // CHỈ CHẠY 1 LẦN khi mount
 
-  // Hàm kiểm tra số điện thoại hợp lệ
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isValidPhone = (value) => {
     const phoneRegex = /^0\d{9,10}$/;
     return phoneRegex.test(value);
@@ -109,9 +130,7 @@ const CustomerLoginScreen = () => {
     setIsLoading(true);
 
     try {
-      // Lấy tenantId từ localStorage (đã lưu khi verify QR)
       const tenantId = localStorage.getItem("tenantId");
-
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/customers/login`,
         {
@@ -130,311 +149,342 @@ const CustomerLoginScreen = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Đăng nhập thất bại");
+        showError(data.message || "Đăng nhập thất bại");
         setIsLoading(false);
         return;
       }
 
-      // lưu thông tin customer vào context
       login(data.data);
-
-      // chuyển sang menu với thông tin bàn đã verify
       navigate("/customer/menu");
     } catch (error) {
       console.error("Login error:", error);
-      alert("Không thể kết nối server!");
+      showError("Không thể kết nối server!");
     }
 
     setIsLoading(false);
   };
 
-  // Hiển thị loading khi đang verify token
+  // --- RENDER ---
+
   if (!tokenVerified) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-white mx-auto mb-4"></div>
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="text-orange-600 text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
           <p className="text-xl font-semibold">Đang xác thực QR code...</p>
           {tableInfo && (
-            <p className="text-sm mt-2">Bàn số: {tableInfo.tableNumber}</p>
+            <p className="text-sm mt-2 text-gray-600">
+              {tableInfo.tableNumber}
+            </p>
           )}
         </div>
       </div>
     );
   }
 
+  // Cấu hình animation "Bay bay" (Floating)
+  const floatingVariant = (delay) => ({
+    animate: {
+      y: [0, -20, 0, 15, 0], // Di chuyển dọc phức tạp hơn
+      x: [0, 10, 0, -10, 0], // Di chuyển ngang nhẹ
+      rotate: [0, 5, -5, 3, 0], // Xoay nhẹ
+      transition: {
+        duration: 5 + Math.random() * 2, // Thời gian ngẫu nhiên từ 5-7s
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay: delay,
+      },
+    },
+  });
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background elements */}
+    <motion.div
+      className="min-h-screen bg-orange-50 flex items-center justify-center p-4 relative overflow-hidden"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0.2 }}
+      transition={{ duration: 0.7 }}
+    >
+      {/* Background Blobs - Di chuyển chậm và mượt hơn */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-orange-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+        <motion.div 
+          animate={{ x: [0, 50, 0], y: [0, -30, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-orange-200/40 rounded-full blur-3xl"
+        />
+        <motion.div 
+          animate={{ x: [0, -30, 0], y: [0, 50, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-yellow-200/40 rounded-full blur-3xl"
+        />
       </div>
 
-      <div className="relative bg-white/95 backdrop-blur-xl shadow-2xl rounded-3xl overflow-hidden max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 transform hover:scale-[1.01] transition-transform duration-500">
-        {/* LEFT - Pure Visual */}
-        <div className="relative bg-gradient-to-br from-orange-500 via-red-500 to-pink-600 flex items-center justify-center p-12 overflow-hidden min-h-[500px]">
-          {/* Animated circles background */}
-          <div className="absolute inset-0">
-            <div className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse"></div>
-            <div className="absolute bottom-0 right-0 w-80 h-80 bg-white/10 rounded-full translate-x-1/3 translate-y-1/3 animate-pulse animation-delay-1000"></div>
-            <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse animation-delay-2000"></div>
+      <div className="relative bg-white/80 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 border border-orange-100/50 z-10">
+        
+        {/* LEFT - Visual Animation Zone */}
+        <motion.div
+          className="relative bg-gradient-to-br from-orange-400 via-orange-500 to-amber-500 flex items-center justify-center p-12 overflow-hidden min-h-[500px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1 }}
+        >
+          {/* Vòng tròn lan tỏa (Pulse) phía sau logo */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.div 
+              animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0, 0.1] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="w-64 h-64 bg-white rounded-full absolute"
+            />
+            <motion.div 
+              animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.05, 0.2] }}
+              transition={{ duration: 4, repeat: Infinity, delay: 0.5 }}
+              className="w-96 h-96 bg-white rounded-full absolute"
+            />
           </div>
 
-          {/* Floating food icons - tăng số lượng */}
-          <div className="absolute top-20 left-10 animate-float">
-            <Utensils className="text-white/30 w-16 h-16 drop-shadow-lg" />
-          </div>
-          <div className="absolute top-32 right-16 animate-float-delayed">
-            <Coffee className="text-white/25 w-14 h-14 drop-shadow-lg" />
-          </div>
-          <div className="absolute bottom-24 left-20 animate-float animation-delay-1000">
-            <Cookie className="text-white/30 w-12 h-12 drop-shadow-lg" />
-          </div>
-          <div className="absolute bottom-32 right-24 animate-float-delayed animation-delay-2000">
-            <UtensilsCrossed className="text-white/25 w-16 h-16 drop-shadow-lg" />
-          </div>
-          <div className="absolute top-1/2 left-16 animate-float animation-delay-600">
-            <Sparkles className="text-white/20 w-10 h-10 drop-shadow-lg" />
-          </div>
+          {/* --- CÁC MÓN ĂN BAY BAY (Floating Icons) --- */}
+          {/* Icon 1: Utensils - Góc trên trái */}
+          <motion.div
+            className="absolute top-16 left-12 text-white/40"
+            variants={floatingVariant(0)}
+            animate="animate"
+          >
+            <Utensils className="w-16 h-16 drop-shadow-md" />
+          </motion.div>
 
-          {/* Central logo with strong animation */}
-          <div className="relative z-10">
-            <div className="relative inline-block">
+          {/* Icon 2: Coffee - Góc trên phải */}
+          <motion.div
+            className="absolute top-24 right-16 text-white/30"
+            variants={floatingVariant(1.5)}
+            animate="animate"
+          >
+            <Coffee className="w-14 h-14 drop-shadow-md" />
+          </motion.div>
+
+          {/* Icon 3: Cookie - Góc dưới trái */}
+          <motion.div
+            className="absolute bottom-24 left-20 text-white/40"
+            variants={floatingVariant(0.5)}
+            animate="animate"
+          >
+            <Cookie className="w-12 h-12 drop-shadow-md" />
+          </motion.div>
+
+          {/* Icon 4: UtensilsCrossed - Góc dưới phải */}
+          <motion.div
+            className="absolute bottom-32 right-24 text-white/30"
+            variants={floatingVariant(2)}
+            animate="animate"
+          >
+            <UtensilsCrossed className="w-16 h-16 drop-shadow-md" />
+          </motion.div>
+
+          {/* Icon 5: Pizza - Giữa trái (Thêm mới cho sinh động) */}
+          <motion.div
+            className="absolute top-1/2 left-8 text-white/20"
+            variants={floatingVariant(1)}
+            animate="animate"
+          >
+            <Pizza className="w-10 h-10 drop-shadow-md" />
+          </motion.div>
+
+           {/* Icon 6: ChefHat - Giữa phải (Thêm mới) */}
+           <motion.div
+            className="absolute bottom-1/3 right-8 text-white/20"
+            variants={floatingVariant(2.5)}
+            animate="animate"
+          >
+            <ChefHat className="w-12 h-12 drop-shadow-md" />
+          </motion.div>
+
+          {/* Sparkles - Lấp lánh ngẫu nhiên */}
+          <motion.div
+            className="absolute top-1/3 left-1/3 text-yellow-200"
+            animate={{ opacity: [0, 1, 0], scale: [0, 1, 0] }}
+            transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+          >
+            <Sparkles className="w-8 h-8" />
+          </motion.div>
+
+          {/* CENTRAL LOGO */}
+          <motion.div className="relative z-10" layoutId="app-logo">
+            <div className="relative inline-block group">
               {/* Glow effect */}
-              <div className="absolute inset-0 bg-white/30 rounded-full blur-3xl animate-pulse scale-150"></div>
+              <motion.div 
+                animate={{ opacity: [0.5, 0.8, 0.5], scale: [0.95, 1.05, 0.95] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute inset-0 bg-white/20 rounded-full blur-2xl"
+              />
 
               {/* Main icon container */}
-              <div className="relative bg-white p-12 rounded-full shadow-2xl transform hover:rotate-12 hover:scale-110 transition-all duration-500">
-                <Utensils className="w-32 h-32 text-orange-500 animate-bounce-slow" />
+              <div className="relative bg-white p-10 rounded-full shadow-2xl transform transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
+                <Utensils className="w-28 h-28 text-orange-500" />
               </div>
             </div>
 
-            {/* Decorative dots */}
-            <div className="flex justify-center gap-4 mt-12">
-              <div className="w-4 h-4 bg-white/80 rounded-full animate-ping"></div>
-              <div className="w-4 h-4 bg-white/80 rounded-full animate-ping animation-delay-300"></div>
-              <div className="w-4 h-4 bg-white/80 rounded-full animate-ping animation-delay-600"></div>
+            {/* Chấm tròn loading trang trí bên dưới */}
+            <div className="flex justify-center gap-3 mt-10">
+              <motion.div 
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 0.2 }}
+                className="w-3 h-3 bg-white/90 rounded-full" 
+              />
+              <motion.div 
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 0.6, repeat: Infinity, delay: 0.2, repeatDelay: 0.2 }}
+                className="w-3 h-3 bg-white/90 rounded-full" 
+              />
+              <motion.div 
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 0.6, repeat: Infinity, delay: 0.4, repeatDelay: 0.2 }}
+                className="w-3 h-3 bg-white/90 rounded-full" 
+              />
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* RIGHT - Login Form */}
-        <div className="p-12 flex flex-col justify-center bg-gradient-to-br from-white to-orange-50">
-          <div className="max-w-md mx-auto w-full space-y-8 animate-fade-in-right">
+        <div className="p-12 flex flex-col justify-center bg-white relative">
+           {/* Trang trí góc phải */}
+           <div className="absolute top-0 right-0 w-32 h-32 bg-orange-100 rounded-bl-full opacity-50 pointer-events-none"></div>
+
+          <div className="max-w-md mx-auto w-full space-y-8">
             {/* Header */}
-            <div className="text-center space-y-2 py-2">
-              <h3 className="text-4xl font-bold bg-gradient-to-r p-2 from-orange-600 to-red-600 bg-clip-text text-transparent">
-                Nhập thông tin
+            <motion.div
+              className="text-center space-y-2 py-2"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <h3 className="text-3xl font-bold text-gray-800 tracking-tight">
+                Kính chào quý khách
               </h3>
-              <p className="text-gray-600">
-                Mời bạn nhập thông tin để bắt đầu đặt món
+              <p className="text-gray-500">
+                Mời quý khách nhập thông tin
               </p>
               {tableInfo && (
-                <div className="mt-3 inline-block bg-orange-100 text-orange-700 px-4 py-2 rounded-full text-sm font-semibold">
-                  🍽️ Bàn số: {tableInfo.tableNumber}
-                </div>
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="mt-4 inline-flex items-center gap-2 bg-orange-50 text-orange-600 border border-orange-200 px-5 py-2 rounded-full text-sm font-bold shadow-sm"
+                >
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                  </span>
+                  {tableInfo.tableNumber}
+                </motion.div>
               )}
-            </div>
+            </motion.div>
 
             <form className="space-y-6" onSubmit={handleLogin}>
               {/* Phone Input */}
-              <div className="space-y-2 group">
-                <label className="block text-md font-semibold text-gray-700 flex items-center gap-2">
+              <motion.div
+                className="space-y-2 group"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <label className="block text-md font-semibold text-gray-700 flex items-center gap-2 pl-1">
                   <Phone className="w-4 h-4 text-orange-500" />
                   Số điện thoại
                 </label>
-                <div className="relative">
+                <div className="relative overflow-hidden rounded-xl">
                   <input
                     type="tel"
-                    className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-lg focus:ring-4 focus:ring-orange-200 focus:border-orange-500 transition-all duration-300 outline-none group-hover:border-orange-300"
+                    className="w-full border-2 border-gray-100 bg-gray-50 px-5 py-4 text-lg focus:bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-300 outline-none placeholder:text-gray-300"
                     placeholder="0123 456 789"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <Phone className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
-                  </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Name Input */}
-              <div className="space-y-2 group">
-                <label className="block text-md font-semibold text-gray-700 flex items-center gap-2">
+              <motion.div
+                className="space-y-2 group"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <label className="block text-md font-semibold text-gray-700 flex items-center gap-2 pl-1">
                   <User className="w-4 h-4 text-orange-500" />
                   Tên của bạn
                 </label>
-                <div className="relative">
+                <div className="relative overflow-hidden rounded-xl">
                   <input
                     type="text"
-                    className="w-full border-2 border-gray-200 rounded-xl px-5 py-4 text-lg focus:ring-4 focus:ring-orange-200 focus:border-orange-500 transition-all duration-300 outline-none group-hover:border-orange-300"
-                    placeholder="Nguyễn Văn A"
+                    className="w-full border-2 border-gray-100 bg-gray-50 px-5 py-4 text-lg focus:bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-300 outline-none placeholder:text-gray-300"
+                    placeholder="Ví dụ: Anh Nam"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <User className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
-                  </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* ERROR MESSAGE */}
               {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg animate-shake">
-                  <p className="text-red-700 text-sm font-medium">{error}</p>
-                </div>
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                  {error}
+                </motion.div>
               )}
 
-              {/* BUTTON WITH LOADING */}
-              <button
+              {/* BUTTON */}
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                whileHover={{ scale: 1.02, boxShadow: "0 10px 25px -5px rgba(249, 115, 22, 0.4)" }}
+                whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={isLoading}
-                className={`w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-3 group ${
-                  isLoading ? "opacity-70 cursor-not-allowed scale-95" : ""
+                className={`w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-orange-200 flex items-center justify-center gap-3 transition-all duration-300 ${
+                  isLoading ? "opacity-70 cursor-not-allowed" : ""
                 }`}
               >
                 {isLoading ? (
                   <>
                     <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Đang đăng nhập...</span>
+                    <span>Đang xử lý...</span>
                   </>
                 ) : (
                   <>
                     <span>Bắt đầu đặt món</span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                    <ArrowRight className="w-5 h-5" />
                   </>
                 )}
-              </button>
+              </motion.button>
             </form>
 
             {/* Footer */}
-            <div className="text-center pt-6 border-t border-gray-200">
-              <p className="text-gray-400 text-sm">
-                © {new Date().getFullYear()} Restaurant Manager
-              </p>
-              <p className="text-orange-600 text-xs mt-2 font-medium">
+            <motion.div
+              className="text-center pt-6 border-t border-gray-100"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
+              <p className="text-orange-400 text-xs font-semibold tracking-wider uppercase">
                 Powered by HDV Team
               </p>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-        }
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0px) rotate(0deg);
-          }
-          50% {
-            transform: translateY(-20px) rotate(5deg);
-          }
-        }
-        @keyframes bounce-slow {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-15px);
-          }
-        }
-        @keyframes spin-slow {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes fade-in-right {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        @keyframes shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-5px);
-          }
-          75% {
-            transform: translateX(5px);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
-        }
-        .animate-float-delayed {
-          animation: float 3s ease-in-out infinite 1.5s;
-        }
-        .animate-bounce-slow {
-          animation: bounce-slow 2s ease-in-out infinite;
-        }
-        .animate-spin-slow {
-          animation: spin-slow 8s linear infinite;
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out;
-        }
-        .animate-fade-in-right {
-          animation: fade-in-right 0.8s ease-out;
-        }
-        .animate-shake {
-          animation: shake 0.4s ease-in-out;
-        }
-        .animation-delay-300 {
-          animation-delay: 0.3s;
-        }
-        .animation-delay-600 {
-          animation-delay: 0.6s;
-        }
-        .animation-delay-1000 {
-          animation-delay: 1s;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
-    </div>
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+      />
+    </motion.div>
   );
 };
 

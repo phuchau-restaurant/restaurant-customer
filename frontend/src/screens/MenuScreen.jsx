@@ -2,9 +2,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
+import { motion } from "framer-motion";
 import { ShoppingCart, Utensils, LogOut } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
+import AlertModal from "../components/Modal/AlertModal";
+import { useAlert } from "../hooks/useAlert";
 
 const defaultCustomer = {
   name: "Khách hàng",
@@ -14,21 +17,23 @@ const defaultCustomer = {
 const MenuScreen = () => {
   const navigate = useNavigate();
   const { customer, tableInfo, logout, updateTable } = useCustomer();
+  const { alert, showSuccess, showError, showWarning, closeAlert } = useAlert();
 
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState("0");
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [categoryIdMap, setCategoryIdMap] = useState({});
   const [avatarUrl, setAvatarUrl] = useState([]);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(false);
 
   // Fetch categories and menu
   useEffect(() => {
     // Kiểm tra đã login và có thông tin bàn chưa
     if (!tableInfo || !tableInfo.id) {
-      alert("⚠️ Vui lòng đăng nhập trước!");
-      navigate("/customer/login");
+      showWarning("Vui lòng đăng nhập trước!");
+      setTimeout(() => navigate("/customer/login"), 2000);
       return;
     }
 
@@ -143,6 +148,7 @@ const MenuScreen = () => {
     if (activeCategory === "all") return;
 
     const fetchMenus = async () => {
+      setIsLoadingMenu(true);
       try {
         const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/menus`;
         const url = new URL(baseUrl);
@@ -182,6 +188,8 @@ const MenuScreen = () => {
         setProducts(mapped);
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
+      } finally {
+        setIsLoadingMenu(false);
       }
     };
 
@@ -230,12 +238,12 @@ const MenuScreen = () => {
         throw new Error(result.message || "Gửi đơn hàng thất bại");
       }
 
-      alert("Đặt món thành công!");
+      showSuccess("Đặt món thành công!");
       setCart([]);
       setIsCartOpen(false);
     } catch (err) {
       console.error("❌ Lỗi đặt món:", err);
-      alert("Đặt món thất bại: " + err.message);
+      showError("Đặt món thất bại: " + err.message);
     }
   };
 
@@ -303,7 +311,13 @@ const MenuScreen = () => {
     return item ? item.qty : 0;
   };
   return (
-    <div className="flex h-screen bg-linear-to-br from-amber-50 via-orange-50 to-red-50 font-sans overflow-hidden relative select-none">
+    <motion.div
+      className="flex h-screen bg-linear-to-br from-amber-50 via-orange-50 to-red-50 font-sans overflow-hidden relative select-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       {isCartOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 transition-opacity duration-300"
@@ -311,20 +325,31 @@ const MenuScreen = () => {
         />
       )}
 
-      <div className="w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-sm z-10">
-        <img
+      <motion.div
+        className="w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-sm z-10"
+        initial={{ x: -100, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        <motion.img
+          layoutId="app-logo"
           src="/images/logo.png"
           alt="Logo"
           className="w-20 h-20 object-contain mb-4"
+          transition={{ duration: 0.6, ease: "easeInOut" }}
         />
-        {categories.map((cat) => (
-          <button
+        {categories.map((cat, index) => (
+          <motion.button
             key={cat.id}
+            initial={{ x: -50, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.3 + index * 0.05 }}
             onClick={() => setActiveCategory(cat.id)}
             className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-300 ${
               activeCategory === cat.id
-                ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105 hover:shadow-xl hover:shadow-orange-400/60"
-                : "text-gray-400 hover:bg-gradient-to-br hover:from-orange-50 hover:to-orange-100 hover:text-orange-600 hover:scale-105"
+                  ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105"
+                  : "text-gray-400"
+
             }`}
           >
             <div className="mb-1">
@@ -345,12 +370,17 @@ const MenuScreen = () => {
               )}
             </div>
             <span className="text-[12px] font-bold">{cat.name}</span>
-          </button>
+          </motion.button>
         ))}
-      </div>
+      </motion.div>
 
       <div className="flex-1 overflow-y-auto flex flex-col h-screen">
-        <header className="px-6 py-4 shrink-0">
+        <motion.header
+          className="px-6 py-4 shrink-0"
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
           <div className="flex justify-between items-center">
             <div className="space-y-2">
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-5 py-3 rounded-full shadow-md text-md font-bold text-white">
@@ -382,24 +412,53 @@ const MenuScreen = () => {
               </button>
             </div>
           </div>
-        </header>
+        </motion.header>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr pb-6">
-          {products.map((product) => (
-            <MenuItem
-              key={product.id}
-              product={product}
-              quantity={getItemQuantity(product.id)}
-              onAdd={() => addToCart(product)}
-              onRemove={() => removeFromCart(product.id)}
-              onQuantityChange={setQuantity}
-            />
-          ))}
-        </div>
+        <motion.div
+          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr pb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          {isLoadingMenu ? (
+            <div className="col-span-full flex flex-col items-center justify-center h-[60vh]">
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Utensils className="w-6 h-6 text-orange-500 animate-pulse" />
+                </div>
+              </div>
+              <p className="mt-4 text-gray-500 font-medium">
+                Đang tải món ăn...
+              </p>
+            </div>
+          ) : (
+            products.map((product, index) => (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.6 + index * 0.03 }}
+              >
+                <MenuItem
+                  product={product}
+                  quantity={getItemQuantity(product.id)}
+                  onAdd={() => addToCart(product)}
+                  onRemove={() => removeFromCart(product.id)}
+                  onQuantityChange={setQuantity}
+                />
+              </motion.div>
+            ))
+          )}
+        </motion.div>
       </div>
 
       {!isCartOpen && totalItems > 0 && (
-        <button
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{ duration: 0.3 }}
           onClick={() => setIsCartOpen(true)}
           className="fixed bottom-8 right-8 bg-linear-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-2xl shadow-orange-400/50 hover:shadow-orange-500/60 hover:scale-105 transition-all duration-300 z-40 flex items-center gap-3 px-6 py-4"
         >
@@ -415,7 +474,7 @@ const MenuScreen = () => {
               {totalAmount.toLocaleString("vi-VN")}₫
             </span>
           </div>
-        </button>
+        </motion.button>
       )}
 
       <div
@@ -477,7 +536,16 @@ const MenuScreen = () => {
           </button>
         </div>
       </div>
-    </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+      />
+    </motion.div>
   );
 };
 

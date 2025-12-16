@@ -1,6 +1,13 @@
 // src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import HomeScreen from "./screens/HomeScreen";
@@ -16,6 +23,22 @@ import TablesScreen from "./screens/TablesScreen";
 import TableFormScreen from "./screens/TableFormScreen";
 import QRManagementScreen from "./screens/QRManagementScreen";
 
+function CustomerRoutes() {
+  const location = useLocation();
+
+  return (
+    <CustomerProvider>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="login" element={<CustomerLoginScreen />} />
+          <Route path="menu" element={<MenuScreen />} />
+          <Route path="*" element={<Navigate to="/customer/login" replace />} />
+        </Routes>
+      </AnimatePresence>
+    </CustomerProvider>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -24,21 +47,7 @@ function App() {
           <Route path="/" element={<Navigate to="/customer/login" replace />} />
 
           {/* Customer Flow */}
-          <Route
-            path="/customer/*"
-            element={
-              <CustomerProvider>
-                <Routes>
-                  <Route path="login" element={<CustomerLoginScreen />} />
-                  <Route path="menu" element={<MenuScreen />} />
-                  <Route
-                    path="*"
-                    element={<Navigate to="/customer/login" replace />}
-                  />
-                </Routes>
-              </CustomerProvider>
-            }
-          />
+          <Route path="/customer/*" element={<CustomerRoutes />} />
 
           {/* Admin/Staff Flow */}
           <Route path="/login" element={<HomeScreen />} />

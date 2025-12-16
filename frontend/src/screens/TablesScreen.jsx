@@ -133,19 +133,12 @@ const TablesScreen = () => {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <img 
-              src="/images/logo.png" 
-              alt="Restaurant Logo" 
-              className="h-16 w-16 object-contain"
-            />
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Quản Lý Bàn</h1>
               <p className="text-gray-600 mt-1">
                 Tổng số: {filteredTables.length} bàn
               </p>
             </div>
-          </div>
           <button
             onClick={handleCreateTable}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"

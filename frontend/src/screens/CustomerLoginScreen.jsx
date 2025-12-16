@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
+import { motion } from "framer-motion";
 import {
   Utensils,
   Phone,
@@ -164,17 +165,31 @@ const CustomerLoginScreen = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center p-4 relative overflow-hidden">
+    <motion.div
+      className="min-h-screen bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center p-4 relative overflow-hidden"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <motion.div
+        className="absolute inset-0 overflow-hidden pointer-events-none"
+        exit={{ opacity: 0, scale: 1.5 }}
+        transition={{ duration: 0.4 }}
+      >
         <div className="absolute top-20 left-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
         <div className="absolute top-40 right-10 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
         <div className="absolute -bottom-8 left-20 w-72 h-72 bg-orange-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
-      </div>
+      </motion.div>
 
       <div className="relative bg-white/95 backdrop-blur-xl shadow-2xl rounded-3xl overflow-hidden max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 transform hover:scale-[1.01] transition-transform duration-500">
         {/* LEFT - Pure Visual */}
-        <div className="relative bg-gradient-to-br from-orange-500 via-red-500 to-pink-600 flex items-center justify-center p-12 overflow-hidden min-h-[500px]">
+        <motion.div
+          className="relative bg-gradient-to-br from-orange-500 via-red-500 to-pink-600 flex items-center justify-center p-12 overflow-hidden min-h-[500px]"
+          exit={{ x: -800, opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+        >
           {/* Animated circles background */}
           <div className="absolute inset-0">
             <div className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse"></div>
@@ -183,24 +198,44 @@ const CustomerLoginScreen = () => {
           </div>
 
           {/* Floating food icons - tăng số lượng */}
-          <div className="absolute top-20 left-10 animate-float">
+          <motion.div
+            className="absolute top-20 left-10 animate-float"
+            exit={{ x: -300, y: -200, opacity: 0, rotate: -180 }}
+            transition={{ duration: 0.6 }}
+          >
             <Utensils className="text-white/30 w-16 h-16 drop-shadow-lg" />
-          </div>
-          <div className="absolute top-32 right-16 animate-float-delayed">
+          </motion.div>
+          <motion.div
+            className="absolute top-32 right-16 animate-float-delayed"
+            exit={{ x: 300, y: -200, opacity: 0, rotate: 180 }}
+            transition={{ duration: 0.6 }}
+          >
             <Coffee className="text-white/25 w-14 h-14 drop-shadow-lg" />
-          </div>
-          <div className="absolute bottom-24 left-20 animate-float animation-delay-1000">
+          </motion.div>
+          <motion.div
+            className="absolute bottom-24 left-20 animate-float animation-delay-1000"
+            exit={{ x: -300, y: 200, opacity: 0, rotate: -90 }}
+            transition={{ duration: 0.6 }}
+          >
             <Cookie className="text-white/30 w-12 h-12 drop-shadow-lg" />
-          </div>
-          <div className="absolute bottom-32 right-24 animate-float-delayed animation-delay-2000">
+          </motion.div>
+          <motion.div
+            className="absolute bottom-32 right-24 animate-float-delayed animation-delay-2000"
+            exit={{ x: 300, y: 200, opacity: 0, rotate: 90 }}
+            transition={{ duration: 0.6 }}
+          >
             <UtensilsCrossed className="text-white/25 w-16 h-16 drop-shadow-lg" />
-          </div>
-          <div className="absolute top-1/2 left-16 animate-float animation-delay-600">
+          </motion.div>
+          <motion.div
+            className="absolute top-1/2 left-16 animate-float animation-delay-600"
+            exit={{ x: -400, opacity: 0, scale: 0 }}
+            transition={{ duration: 0.5 }}
+          >
             <Sparkles className="text-white/20 w-10 h-10 drop-shadow-lg" />
-          </div>
+          </motion.div>
 
           {/* Central logo with strong animation */}
-          <div className="relative z-10">
+          <motion.div className="relative z-10" layoutId="app-logo">
             <div className="relative inline-block">
               {/* Glow effect */}
               <div className="absolute inset-0 bg-white/30 rounded-full blur-3xl animate-pulse scale-150"></div>
@@ -217,14 +252,18 @@ const CustomerLoginScreen = () => {
               <div className="w-4 h-4 bg-white/80 rounded-full animate-ping animation-delay-300"></div>
               <div className="w-4 h-4 bg-white/80 rounded-full animate-ping animation-delay-600"></div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* RIGHT - Login Form */}
         <div className="p-12 flex flex-col justify-center bg-gradient-to-br from-white to-orange-50">
           <div className="max-w-md mx-auto w-full space-y-8 animate-fade-in-right">
             {/* Header */}
-            <div className="text-center space-y-2 py-2">
+            <motion.div
+              className="text-center space-y-2 py-2"
+              exit={{ opacity: 0, y: -100 }}
+              transition={{ duration: 0.4 }}
+            >
               <h3 className="text-4xl font-bold bg-gradient-to-r p-2 from-orange-600 to-red-600 bg-clip-text text-transparent">
                 Nhập thông tin
               </h3>
@@ -236,11 +275,15 @@ const CustomerLoginScreen = () => {
                   🍽️ Bàn số: {tableInfo.tableNumber}
                 </div>
               )}
-            </div>
+            </motion.div>
 
             <form className="space-y-6" onSubmit={handleLogin}>
               {/* Phone Input */}
-              <div className="space-y-2 group">
+              <motion.div
+                className="space-y-2 group"
+                exit={{ opacity: 0, x: -400, rotate: -15 }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
                 <label className="block text-md font-semibold text-gray-700 flex items-center gap-2">
                   <Phone className="w-4 h-4 text-orange-500" />
                   Số điện thoại
@@ -257,10 +300,14 @@ const CustomerLoginScreen = () => {
                     <Phone className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Name Input */}
-              <div className="space-y-2 group">
+              <motion.div
+                className="space-y-2 group"
+                exit={{ opacity: 0, x: 400, rotate: 15 }}
+                transition={{ duration: 0.5, delay: 0.05, ease: "easeInOut" }}
+              >
                 <label className="block text-md font-semibold text-gray-700 flex items-center gap-2">
                   <User className="w-4 h-4 text-orange-500" />
                   Tên của bạn
@@ -277,7 +324,7 @@ const CustomerLoginScreen = () => {
                     <User className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* ERROR MESSAGE */}
               {error && (
@@ -287,7 +334,9 @@ const CustomerLoginScreen = () => {
               )}
 
               {/* BUTTON WITH LOADING */}
-              <button
+              <motion.button
+                exit={{ opacity: 0, y: 200, scale: 0.5 }}
+                transition={{ duration: 0.5, delay: 0.1, ease: "easeInOut" }}
                 type="submit"
                 disabled={isLoading}
                 className={`w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-3 group ${
@@ -305,18 +354,22 @@ const CustomerLoginScreen = () => {
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
                   </>
                 )}
-              </button>
+              </motion.button>
             </form>
 
             {/* Footer */}
-            <div className="text-center pt-6 border-t border-gray-200">
+            <motion.div
+              className="text-center pt-6 border-t border-gray-200"
+              exit={{ opacity: 0, y: 100 }}
+              transition={{ duration: 0.4 }}
+            >
               <p className="text-gray-400 text-sm">
                 © {new Date().getFullYear()} Restaurant Manager
               </p>
               <p className="text-orange-600 text-xs mt-2 font-medium">
                 Powered by HDV Team
               </p>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -434,7 +487,7 @@ const CustomerLoginScreen = () => {
           animation-delay: 4s;
         }
       `}</style>
-    </div>
+    </motion.div>
   );
 };
 

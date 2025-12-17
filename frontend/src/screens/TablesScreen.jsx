@@ -1,24 +1,44 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Filter, Search, Grid, List, QrCode, Users, MapPin, Check, X, Calendar, UserCheck, UserX } from "lucide-react";
-import { getAllTables, updateTable } from "../data/mockTables";
 import TableStatus from "../../constants/tableStatus";
-import TableLocation from "../../constants/tableLocation";
 
+// Components
+import TablesHeader from "../components/tables/TablesHeader";
+import TablesFilterBar from "../components/tables/TablesFilterBar";
+import TableCard from "../components/tables/TableCard";
+import TableListView from "../components/tables/TableListView";
+import TableFormInline from "../components/tables/TableFormInline";
+
+/**
+ * TablesScreen - Màn hình quản lý bàn
+ * Hiển thị danh sách bàn với các chức năng:
+ * - Lọc theo trạng thái, khu vực
+ * - Tìm kiếm theo tên bàn, khu vực
+ * - Sắp xếp theo tên bàn, sức chứa
+ * - Xem dạng lưới hoặc danh sách
+ * - Cập nhật trạng thái bàn (Trống/Có khách)
+ */
 const TablesScreen = () => {
   const navigate = useNavigate();
+
+  // State quản lý dữ liệu
   const [tables, setTables] = useState([]);
   const [filteredTables, setFilteredTables] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState("grid"); // grid or list
-  
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState(""); 
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+
+  // State quản lý UI
+  const [viewMode, setViewMode] = useState("grid");
+  const [showForm, setShowForm] = useState(false);
+  const [editingTableId, setEditingTableId] = useState(null);
+
+  // State quản lý filters
+  const [statusFilter, setStatusFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("tableNumber"); 
-  
-  // Status options for filter - from constants
+  const [sortBy, setSortBy] = useState("tableNumber");
+
+  // Options cho dropdowns
   const statusOptions = [
     { value: "", label: "Tất cả trạng thái" },
     { value: TableStatus.AVAILABLE, label: "Trống" },
@@ -27,190 +47,228 @@ const TablesScreen = () => {
   ];
 
   const [areaOptions, setAreaOptions] = useState([
-  { value: "", label: "Tất cả khu vực" },
+    { value: "", label: "Tất cả khu vực" },
   ]);
 
+  // ==================== LIFECYCLE ====================
 
-
-  // Fetch tables from API
+  // Fetch dữ liệu ban đầu
   useEffect(() => {
     fetchTables();
     fetchLocationOptions();
   }, []);
 
-  // Refetch when filters change
+  // Refetch khi filters thay đổi (server-side filtering)
   useEffect(() => {
     fetchTables();
   }, [statusFilter, areaFilter]);
 
-const fetchLocationOptions = async () => {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/appsettings?category=Location`,
-      {
+  // Filter và sort phía client (search và sort)
+  useEffect(() => {
+    filterAndSortTables();
+  }, [tables, searchTerm, sortBy]);
+
+  // ==================== API CALLS ====================
+
+  /**
+   * Fetch danh sách bàn từ API
+   * Filters: status, location (server-side)
+   */
+  const fetchTables = async () => {
+    try {
+      setIsFetching(true);
+
+      // Build query params
+      const queryParams = new URLSearchParams();
+      if (statusFilter) queryParams.append("status", statusFilter);
+      if (areaFilter) queryParams.append("location", areaFilter);
+
+      const url = `${import.meta.env.VITE_BACKEND_URL}/api/admin/tables${
+        queryParams.toString() ? `?${queryParams.toString()}` : ""
+      }`;
+
+      const response = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
           "x-tenant-id": import.meta.env.VITE_TENANT_ID,
         },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setTables(result.data || []);
+      } else {
+        setTables([]);
       }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error("Fetch appsettings failed");
-    }
-
-    const mappedOptions = [
-      { value: "", label: "Tất cả khu vực" },
-      ...(result.data || []).map((item) => ({
-        value: item.value,
-        label: item.value,
-      })),
-    ];
-
-    setAreaOptions(mappedOptions);
-  } catch (error) {
-    console.error("Fetch area options error:", error);
-    setAreaOptions([{ value: "", label: "Tất cả khu vực" }]);
-  }
-};
-
-
-  const fetchTables = async () => {
-  try {
-    setIsLoading(true);
-
-    const queryParams = new URLSearchParams();
-
-    if (statusFilter) {
-      queryParams.append("status", statusFilter);
-    }
-
-    if (areaFilter) {
-      queryParams.append("location", areaFilter);
-    }
-
-    const url = `${import.meta.env.VITE_BACKEND_URL}/api/admin/tables${
-      queryParams.toString() ? `?${queryParams.toString()}` : ""
-    }`;
-
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "x-tenant-id": import.meta.env.VITE_TENANT_ID,
-      },
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      setTables(result.data || []);
-    } else {
-      setTables([]);
-    }
     } catch (error) {
       console.error("Fetch tables error:", error);
       setTables([]);
     } finally {
-      setIsLoading(false);
+      setIsFetching(false);
+      setInitialLoading(false);
     }
   };
 
+  /**
+   * Fetch danh sách khu vực từ appsettings API
+   */
+  const fetchLocationOptions = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/appsettings?category=Location`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+        }
+      );
 
-  // Filter and sort tables (client-side for search and sort only)
-  useEffect(() => {
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        const mappedOptions = [
+          { value: "", label: "Tất cả khu vực" },
+          ...(result.data || []).map((item) => ({
+            value: item.value,
+            label: item.value,
+          })),
+        ];
+        setAreaOptions(mappedOptions);
+      }
+    } catch (error) {
+      console.error("Fetch area options error:", error);
+    }
+  };
+
+  /**
+   * Cập nhật trạng thái bàn (Trống <-> Có khách)
+   * PATCH /api/admin/tables/:id/status
+   */
+  const toggleOccupiedStatus = async (tableId, currentStatus) => {
+    try {
+      const newStatus =
+        currentStatus === TableStatus.OCCUPIED
+          ? TableStatus.AVAILABLE
+          : TableStatus.OCCUPIED;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/admin/tables/${tableId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Cập nhật trạng thái thất bại");
+      }
+
+      // Refresh danh sách bàn
+      fetchTables();
+    } catch (error) {
+      console.error("Error updating occupied status:", error);
+      alert(error.message || "Có lỗi xảy ra khi cập nhật trạng thái");
+    }
+  };
+
+  // ==================== HELPERS ====================
+
+  /**
+   * Filter và sort tables phía client
+   * - Filter: searchTerm (tìm kiếm tên bàn, khu vực)
+   * - Sort: tableNumber, capacity
+   */
+  const filterAndSortTables = () => {
     let result = [...tables];
 
-    // Filter by search term (client-side)
+    // Filter theo search term
     if (searchTerm) {
       result = result.filter(
         (table) =>
-          table.tableNumber.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+          table.tableNumber
+            .toString()
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
           table.location?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    const parseTableNumber = (value) => {
-      const str = String(value ?? "").trim().toLowerCase();
-
-      // check VIP
-      const isVip = str.includes("vip") ? 1 : 0;
-
-      // lấy số trong chuỗi (table vip 12 -> 12)
-      const match = str.match(/\d+/);
-      const number = match ? Number(match[0]) : 0;
-
-      return { isVip, number };
-    };
-
-    // Sort (client-side)
+    // Sort
     result.sort((a, b) => {
       if (sortBy === "tableNumber") {
-        const A = parseTableNumber(a.tableNumber);
-        const B = parseTableNumber(b.tableNumber);
-
-        // 1️⃣ bàn thường trước – VIP sau
-        if (A.isVip !== B.isVip) {
-          return A.isVip - B.isVip;
-        }
-
-        // 2️⃣ cùng loại → sort theo số tăng dần
-        return A.number - B.number;
+        return sortByTableNumber(a, b);
       }
-
       if (sortBy === "capacity") {
-        return a.capacity - b.capacity; // tăng dần
+        return a.capacity - b.capacity;
       }
-
       return 0;
     });
 
     setFilteredTables(result);
-  }, [tables, searchTerm, sortBy]);
-
-
-  const handleCreateTable = () => {
-    navigate("/tables/new");
   };
 
-  const handleEditTable = (table) => {
-    navigate(`/tables/edit/${table.id}`);
-  };
+  /**
+   * Sort bàn theo số bàn (bàn thường trước, VIP sau, sau đó theo số)
+   */
+  const sortByTableNumber = (a, b) => {
+    const parseTableNumber = (value) => {
+      const str = String(value ?? "").trim().toLowerCase();
+      const isVip = str.includes("vip") ? 1 : 0;
+      const match = str.match(/\d+/);
+      const number = match ? Number(match[0]) : 0;
+      return { isVip, number };
+    };
 
-  const toggleTableStatus = async (tableId, currentStatus) => {
-    try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      updateTable(tableId, { isActive: !currentStatus });
-      
-      // Refresh tables
-      fetchTables();
-    } catch (error) {
-      console.error("Error updating table status:", error);
+    const A = parseTableNumber(a.tableNumber);
+    const B = parseTableNumber(b.tableNumber);
+
+    // Bàn thường trước, VIP sau
+    if (A.isVip !== B.isVip) {
+      return A.isVip - B.isVip;
     }
+
+    // Cùng loại thì sort theo số
+    return A.number - B.number;
   };
 
-  const toggleOccupiedStatus = async (tableId, currentStatus) => {
-    try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const newStatus = currentStatus === TableStatus.OCCUPIED 
-        ? TableStatus.AVAILABLE 
-        : TableStatus.OCCUPIED;
-      
-      updateTable(tableId, { status: newStatus });
-      
-      // Refresh tables
-      fetchTables();
-    } catch (error) {
-      console.error("Error updating occupied status:", error);
-    }
-  };
+  // ==================== HANDLERS ====================
 
-  if (isLoading) {
+  const handleCreateTable = useCallback(() => {
+    setEditingTableId(null);
+    setShowForm(true);
+  }, []);
+
+  const handleEditTable = useCallback((tableId) => {
+    setEditingTableId(tableId);
+    setShowForm(true);
+  }, []);
+
+  const handleCancelForm = useCallback(() => {
+    setShowForm(false);
+    setEditingTableId(null);
+  }, []);
+
+  const handleFormSuccess = useCallback(() => {
+    setShowForm(false);
+    setEditingTableId(null);
+    fetchTables(); // Refresh danh sách bàn
+  }, [statusFilter, areaFilter]);
+
+  const handleManageQR = useCallback(() => {
+    navigate("/tables/qr");
+  }, [navigate]);
+
+  // ==================== RENDER ====================
+
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-gray-500">Đang tải...</div>
@@ -221,336 +279,69 @@ const fetchLocationOptions = async () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">Quản Lý Bàn</h1>
-              <p className="text-gray-600 mt-1">
-                Tổng số: {filteredTables.length} bàn
-              </p>
-            </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate("/tables/qr")}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <QrCode className="w-5 h-5" />
-              Quản Lý QR
-            </button>
-            <button
-              onClick={handleCreateTable}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Thêm Bàn Mới
-            </button>
-          </div>
-        </div>
+      <TablesHeader
+        totalTables={filteredTables.length}
+        onCreateTable={handleCreateTable}
+        onManageQR={handleManageQR}
+      />
 
-        {/* Filters and Controls */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex flex-wrap gap-4 items-center">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Tìm kiếm số bàn, khu vực..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-            </select>
-
-            {/* Location Filter */}
-            <select
-              value={areaFilter}
-              onChange={(e) => setAreaFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {areaOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-
-            {/* Sort */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="tableNumber">Sắp xếp theo số bàn</option>
-              <option value="capacity">Sắp xếp theo sức chứa</option>
-              <option value="createdAt">Sắp xếp theo ngày tạo</option>
-            </select>
-
-            {/* View Mode Toggle */}
-            <div className="flex gap-2 border border-gray-300 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded ${
-                  viewMode === "grid"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <Grid className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-2 rounded ${
-                  viewMode === "list"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <List className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Filter Bar */}
+      <TablesFilterBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        statusOptions={statusOptions}
+        areaFilter={areaFilter}
+        onAreaChange={setAreaFilter}
+        areaOptions={areaOptions}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
       {/* Tables Display */}
-      {filteredTables.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-          <p className="text-gray-500 mb-4">Không tìm thấy bàn nào</p>
-          <button
-            onClick={handleCreateTable}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Thêm bàn mới
-          </button>
-        </div>
-      ) : viewMode === "grid" ? (
-        // Grid View
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredTables.map((table) => (
-            <div
-              key={table.id}
-              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-200 flex flex-col"
+      <div className="mt-6">
+        {showForm ? (
+          // Form tạo/sửa bàn
+          <TableFormInline
+            tableId={editingTableId}
+            onCancel={handleCancelForm}
+            onSuccess={handleFormSuccess}
+          />
+        ) : filteredTables.length === 0 ? (
+          // Empty state
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <p className="text-gray-500 mb-4">Không tìm thấy bàn nào</p>
+            <button
+              onClick={handleCreateTable}
+              className="text-blue-600 hover:text-blue-700 font-medium"
             >
-              {/* Table Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    {table.tableNumber}
-                  </h3>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      table.status === TableStatus.OCCUPIED
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {table.status === TableStatus.OCCUPIED ? "Có khách" : "Trống"}
-                  </span>
-                </div>
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    table.isActive
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {table.isActive ? "Hoạt động" : "Không hoạt động"}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span className="text-sm">{table.location || "Chưa xác định"}</span>
-                </div>
-                {table.qrToken != null && (
-                  <QrCode className="w-5 h-5 text-blue-600" />
-                )}
-              </div>
-
-              {/* Capacity */}
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-700">
-                  Sức chứa: {table.capacity} người
-                </span>
-              </div>
-
-              {/* Description */}
-              {table.description && (
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                  {table.description}
-                </p>
-              )}
-
-              {/* Spacer to push actions to bottom */}
-              <div className="flex-1"></div>
-
-              {/* Actions */}
-              <div className="space-y-2 pt-4 border-t border-gray-100 mt-auto">
-                <button
-                  onClick={() => handleEditTable(table.id)}
-                  className="w-full px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-                >
-                  Chỉnh sửa
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => toggleOccupiedStatus(table.id, table.status)}
-                    className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
-                      table.status === TableStatus.OCCUPIED
-                        ? "bg-red-50 text-red-600 hover:bg-red-100"
-                        : "bg-green-50 text-green-600 hover:bg-green-100"
-                    }`}
-                    title={table.status === TableStatus.OCCUPIED ? "Đánh dấu trống" : "Đánh dấu có khách"}
-                    disabled={!table.isActive}
-                  >
-                    {table.status === TableStatus.OCCUPIED ? "Trống" : "Có khách"}
-                  </button>
-                  <button
-                    onClick={() => toggleTableStatus(table.id, table.isActive)}
-                    className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
-                      table.isActive
-                        ? "bg-red-50 text-red-600 hover:bg-red-100"
-                        : "bg-green-50 text-green-600 hover:bg-green-100"
-                    }`}
-                    title={table.isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-                  >
-                    {table.isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        // List View
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Số Bàn
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Khu Vực
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sức Chứa
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Trạng Thái
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tình Trạng
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  QR Code
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thao Tác
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredTables.map((table) => (
-                <tr key={table.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-lg font-semibold text-gray-800">
-                      Bàn {table.tableNumber}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <MapPin className="w-4 h-4" />
-                      {table.location || "Chưa xác định"}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Users className="w-4 h-4" />
-                      {table.capacity} người
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        table.isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {table.isActive ? "Hoạt động" : "Không hoạt động"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        table.status === TableStatus.OCCUPIED
-                          ? "bg-red-100 text-red-700"
-                          : "bg-green-100 text-green-700"
-                      }`}
-                    >
-                      {table.status === TableStatus.OCCUPIED ? "Có khách" : "Trống"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">                    {table.qrToken != null? (
-                      <QrCode className="w-5 h-5 text-blue-600" />
-                    ) : (
-                      <span className="text-gray-400 text-sm">Chưa có</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        onClick={() => handleEditTable(table.id)}
-                        className="px-3 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors text-sm font-medium"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => toggleOccupiedStatus(table.id, table.status)}
-                        className={`px-3 py-1 rounded transition-colors text-sm font-medium ${
-                          table.status === TableStatus.OCCUPIED
-                            ? "bg-red-50 text-red-600 hover:bg-red-100"
-                            : "bg-green-50 text-green-600 hover:bg-green-100"
-                        }`}
-                        disabled={!table.isActive}
-                      >
-                        {table.status === TableStatus.OCCUPIED ? "Trống" : "Có khách"}
-                      </button>
-                      <button
-                        onClick={() => toggleTableStatus(table.id, table.isActive)}
-                        className={`px-3 py-1 rounded transition-colors text-sm font-medium ${
-                          table.isActive
-                            ? "bg-red-50 text-red-600 hover:bg-red-100"
-                            : "bg-green-50 text-green-600 hover:bg-green-100"
-                        }`}
-                      >
-                        {table.isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              Thêm bàn mới
+            </button>
+          </div>
+        ) : viewMode === "grid" ? (
+          // Grid View
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredTables.map((table) => (
+              <TableCard
+                key={table.id}
+                table={table}
+                onEdit={handleEditTable}
+                onToggleStatus={toggleOccupiedStatus}
+              />
+            ))}
+          </div>
+        ) : (
+          // List View
+          <TableListView
+            tables={filteredTables}
+            onEdit={handleEditTable}
+            onToggleStatus={toggleOccupiedStatus}
+          />
+        )}
+      </div>
     </div>
   );
 };

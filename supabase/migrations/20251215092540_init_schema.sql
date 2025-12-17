@@ -127,6 +127,7 @@ CREATE TABLE tables (
     table_number VARCHAR(20) NOT NULL, -- Ban 1, Ban 2, Ban Vip 1, Ban Vip 2, ...
     capacity  int default 4 check (capacity  > 0 and capacity <= 20),
     location table_location default 'Indoor',
+    is_vip BOOLEAN DEFAULT false,
     qr_token varchar(500), -- null
     status table_status DEFAULT 'Active',
     qr_token_created_at TIMESTAMP,

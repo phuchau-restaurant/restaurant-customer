@@ -5,7 +5,7 @@ export class Tables {
     this.tenantId = data.tenant_id || data.tenantId;
     this.tableNumber = data.table_number || data.tableNumber;
     this.capacity = data.capacity;
-    this.isVip = data.is_vip || data.isVip || false;
+    this.isVip = data.is_vip || data.isVip || data.isvip || false;
     this.location = data.location;
     this.status = data.status || 'Active'; // Default Active
     this.description = data.description || null;

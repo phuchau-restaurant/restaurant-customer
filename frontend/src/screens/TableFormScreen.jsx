@@ -31,6 +31,12 @@ const TableFormScreen = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [areas, setAreas] = useState([]);
+
+  // Fetch available locations from API
+  useEffect(() => {
+    fetchAvailableLocations();
+  }, []);
 
   // Fetch table data if editing
   useEffect(() => {
@@ -38,6 +44,32 @@ const TableFormScreen = () => {
       fetchTableData();
     }
   }, [id]);
+
+  const fetchAvailableLocations = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/appsettings?category=Location`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error("Fetch appsettings failed");
+      }
+
+      const locations = (result.data || []).map((item) => item.value);
+      setAreas(locations);
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      setAreas([]);
+    }
+  };
 
     const fetchTableData = async () => {
     try {
@@ -337,8 +369,7 @@ const handleSubmit = async (e) => {
                 Khu Vực / Vị Trí <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <input
-                  type="text"
+                <select
                   value={formData.area}
                   onChange={(e) => handleInputChange("area", e.target.value)}
                   className={`w-full px-4 py-3 pl-12 border-2 rounded-lg focus:outline-none transition-all ${
@@ -346,8 +377,15 @@ const handleSubmit = async (e) => {
                       ? "border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100"
                       : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   }`}
-                  placeholder="Nhập khu vực (VD: Tầng 1, Sân thượng, VIP...)"
-                />
+                >
+                  <option value="">Chọn khu vực</option>
+                  {areas.map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
+                </select>
+
                 <MapPin
                   className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${
                     errors.area ? "text-red-400" : "text-gray-400"

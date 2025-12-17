@@ -26,25 +26,56 @@ const TablesScreen = () => {
     { value: TableStatus.INACTIVE, label: "Không hoạt động" },
   ];
 
-  
-  const areaOptions = [
-    { value: "", label: "Tất cả khu vực" },
-    ...Object.values(TableLocation).map((loc) => ({
-      value: loc,
-      label: loc,
-    })),
-  ];
+  const [areaOptions, setAreaOptions] = useState([
+  { value: "", label: "Tất cả khu vực" },
+  ]);
+
 
 
   // Fetch tables from API
   useEffect(() => {
     fetchTables();
+    fetchLocationOptions();
   }, []);
 
   // Refetch when filters change
   useEffect(() => {
     fetchTables();
   }, [statusFilter, areaFilter]);
+
+const fetchLocationOptions = async () => {
+  try {
+    const response = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/appsettings?category=Location`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+        },
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error("Fetch appsettings failed");
+    }
+
+    const mappedOptions = [
+      { value: "", label: "Tất cả khu vực" },
+      ...(result.data || []).map((item) => ({
+        value: item.value,
+        label: item.value,
+      })),
+    ];
+
+    setAreaOptions(mappedOptions);
+  } catch (error) {
+    console.error("Fetch area options error:", error);
+    setAreaOptions([{ value: "", label: "Tất cả khu vực" }]);
+  }
+};
+
 
   const fetchTables = async () => {
   try {
@@ -198,13 +229,22 @@ const TablesScreen = () => {
                 Tổng số: {filteredTables.length} bàn
               </p>
             </div>
-          <button
-            onClick={handleCreateTable}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Thêm Bàn Mới
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate("/tables/qr")}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              <QrCode className="w-5 h-5" />
+              Quản Lý QR
+            </button>
+            <button
+              onClick={handleCreateTable}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Thêm Bàn Mới
+            </button>
+          </div>
         </div>
 
         {/* Filters and Controls */}
@@ -235,7 +275,7 @@ const TablesScreen = () => {
                 ))}
             </select>
 
-            {/* Area Filter */}
+            {/* Location Filter */}
             <select
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value)}
@@ -245,8 +285,9 @@ const TablesScreen = () => {
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
-              ))}   
+              ))}
             </select>
+
 
             {/* Sort */}
             <select

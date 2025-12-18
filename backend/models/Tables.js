@@ -8,6 +8,8 @@ export class Tables {
     this.isVip = data.is_vip || data.isVip || data.isvip || false;
     this.location = data.location;
     this.status = data.status || 'Active'; // Default Active
+    this.createdAt = data.created_at || data.createdAt;
+    this.updatedAt = data.updated_at || data.updatedAt;
     this.description = data.description || null;
     
     // Các trường liên quan đến QR Code (Future proofing)
@@ -29,6 +31,8 @@ export class Tables {
       location: this.location,
       is_vip: this.isVip,
       status: this.status,
+      created_at: this.createdAt,
+      updated_at: this.updatedAt,
       description: this.description,
       qr_token: this.qrToken,
       qr_token_created_at: this.qrTokenCreatedAt,

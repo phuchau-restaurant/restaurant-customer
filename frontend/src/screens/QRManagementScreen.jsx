@@ -23,7 +23,54 @@ const QRManagementScreen = () => {
 
   useEffect(() => {
     fetchTables();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchQRForTable = async (tableId) => {
+    try {
+      const url = `${
+        import.meta.env.VITE_BACKEND_URL
+      }/api/admin/tables/${tableId}/qr/view`;
+      const token =
+        localStorage.getItem("token") || localStorage.getItem("authToken");
+
+      if (!token) return;
+
+      // Set loading state
+      setTables((prev) =>
+        prev.map((t) => (t.id === tableId ? { ...t, qrLoading: true } : t))
+      );
+
+      const response = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === tableId
+              ? { ...t, qrCodeData: result.data, qrLoading: false }
+              : t
+          )
+        );
+      } else {
+        setTables((prev) =>
+          prev.map((t) => (t.id === tableId ? { ...t, qrLoading: false } : t))
+        );
+      }
+    } catch (error) {
+      console.error(`Error fetching QR for table ${tableId}:`, error);
+      setTables((prev) =>
+        prev.map((t) => (t.id === tableId ? { ...t, qrLoading: false } : t))
+      );
+    }
+  };
 
   const fetchTables = async () => {
     try {
@@ -44,14 +91,18 @@ const QRManagementScreen = () => {
         const tablesData = (result.data || []).map((table) => ({
           ...table,
           hasQR: !!table.qrToken,
-          qrCodeUrl: table.qrToken
-            ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
-                table.qrToken
-              )}`
-            : null,
           qrGeneratedAt: table.qrTokenCreatedAt,
+          qrCodeData: null,
+          qrLoading: false,
         }));
         setTables(tablesData);
+
+        // Fetch QR codes cho các bàn có QR
+        tablesData.forEach((table) => {
+          if (table.hasQR) {
+            fetchQRForTable(table.id);
+          }
+        });
       } else {
         setTables([]);
       }
@@ -113,17 +164,16 @@ const QRManagementScreen = () => {
   };
 
   const handleDownloadPNG = async (table) => {
-    if (!table.qrCodeUrl) {
-      alert("Bàn này chưa có mã QR");
+    if (!table.qrCodeData?.qrCode) {
+      alert("QR code chưa được tải. Vui lòng đợi...");
       return;
     }
 
     try {
-      // Download image directly
+      // Download image directly from base64
       const link = document.createElement("a");
-      link.href = table.qrCodeUrl;
+      link.href = table.qrCodeData.qrCode;
       link.download = `QR-Ban-${table.tableNumber}.png`;
-      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -149,8 +199,8 @@ const QRManagementScreen = () => {
   };
 
   const handlePrint = (table) => {
-    if (!table.qrCodeUrl) {
-      alert("Bàn này chưa có mã QR");
+    if (!table.qrCodeData?.qrCode) {
+      alert("QR code chưa được tải. Vui lòng đợi...");
       return;
     }
 
@@ -201,7 +251,7 @@ const QRManagementScreen = () => {
             <h1>Bàn ${table.tableNumber}</h1>
             <p>${table.area || ""}</p>
             <div class="qr-container">
-              <img src="${table.qrCodeUrl}" alt="QR Code" />
+              <img src="${table.qrCodeData.qrCode}" alt="QR Code" />
             </div>
             <p style="font-size: 28px; margin-top: 30px;">Scan to Order</p>
           </div>
@@ -315,13 +365,23 @@ const QRManagementScreen = () => {
               </div>
 
               {/* QR Code Preview */}
-              {table.hasQR && table.qrCodeUrl && (
+              {table.hasQR && (
                 <div className="flex justify-center mb-4 bg-gray-50 p-4 rounded-lg">
-                  <img
-                    src={table.qrCodeUrl}
-                    alt={`QR Code Bàn ${table.tableNumber}`}
-                    className="w-[180px] h-[180px] object-contain"
-                  />
+                  {table.qrLoading ? (
+                    <div className="w-[180px] h-[180px] flex items-center justify-center">
+                      <div className="text-gray-500 text-sm">Đang tải...</div>
+                    </div>
+                  ) : table.qrCodeData?.qrCode ? (
+                    <img
+                      src={table.qrCodeData.qrCode}
+                      alt={`QR Code Bàn ${table.tableNumber}`}
+                      className="w-[180px] h-[180px] object-contain"
+                    />
+                  ) : (
+                    <div className="w-[180px] h-[180px] flex items-center justify-center">
+                      <QrCode className="w-16 h-16 text-gray-300" />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -341,7 +401,7 @@ const QRManagementScreen = () => {
                   <>
                     <button
                       onClick={() => handleViewQR(table)}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                     >
                       <Eye className="w-4 h-4" />
                       Xem Chi Tiết
@@ -498,13 +558,20 @@ const QRManagementScreen = () => {
               </h2>
               <p className="text-gray-600 mb-6">{selectedTable.area}</p>
 
-              {selectedTable.qrCodeUrl && (
+              {selectedTable.qrCodeData?.qrCode ? (
                 <div className="bg-gray-50 p-6 rounded-lg mb-6 inline-block">
                   <img
-                    src={selectedTable.qrCodeUrl}
+                    src={selectedTable.qrCodeData.qrCode}
                     alt={`QR Code Bàn ${selectedTable.tableNumber}`}
                     className="w-[300px] h-[300px] object-contain"
                   />
+                </div>
+              ) : (
+                <div
+                  className="bg-gray-50 p-6 rounded-lg mb-6 flex items-center justify-center"
+                  style={{ width: "300px", height: "300px" }}
+                >
+                  <div className="text-gray-500">Đang tải QR code...</div>
                 </div>
               )}
 

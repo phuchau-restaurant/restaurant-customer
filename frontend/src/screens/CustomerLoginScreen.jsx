@@ -79,9 +79,6 @@ const CustomerLoginScreen = () => {
           id: data.data.tableId,
           number: data.data.tableNumber,
         });
-        localStorage.setItem("qrToken", token);
-        localStorage.setItem("tableInfo", JSON.stringify(data.data));
-        localStorage.setItem("tenantId", data.data.tenantId);
         setTokenVerified(true);
       } catch (error) {
         clearTimeout(timeoutId);

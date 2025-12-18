@@ -1,15 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  QrCode,
-  Download,
-  Printer,
-  RefreshCw,
-  Eye,
-  ArrowLeft,
-  Grid,
-  List,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import QRStats from "./QrManagement/QRStats";
+import QRGridView from "./QrManagement/QRGridView";
+import QRListView from "./QrManagement/QRListView";
+import QRDetailModal from "./QrManagement/QRDetailModal";
+import RegenerateConfirmModal from "./QrManagement/RegenerateConfirmModal";
 
 const QRManagementScreen = () => {
   const navigate = useNavigate();
@@ -17,152 +13,162 @@ const QRManagementScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState("grid"); // grid or list
   const [selectedTable, setSelectedTable] = useState(null);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
-  const qrRef = useRef(null);
 
   useEffect(() => {
     fetchTables();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // TODO: [API INTEGRATION] Kết nối API lấy QR code cho từng bàn
+  // Endpoint: GET /api/admin/tables/:id/qr/view
+  // Response: { data: { tableId, tableNumber, qrCode (base64), customerLoginUrl, qrTokenCreatedAt, expiresAt } }
   const fetchQRForTable = async (tableId) => {
-    try {
-      const url = `${
-        import.meta.env.VITE_BACKEND_URL
-      }/api/admin/tables/${tableId}/qr/view`;
-      const token =
-        localStorage.getItem("token") || localStorage.getItem("authToken");
+    // MOCK DATA - Thay thế bằng API call thực tế
+    setTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, qrLoading: true } : t))
+    );
 
-      if (!token) return;
+    // Simulate API delay
+    setTimeout(() => {
+      const mockQRBase64 =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-      // Set loading state
       setTables((prev) =>
-        prev.map((t) => (t.id === tableId ? { ...t, qrLoading: true } : t))
+        prev.map((t) =>
+          t.id === tableId
+            ? {
+                ...t,
+                qrCodeData: {
+                  tableId: tableId,
+                  tableNumber: t.tableNumber,
+                  qrCode: mockQRBase64,
+                  customerLoginUrl: `${
+                    import.meta.env.VITE_FRONTEND_URL
+                  }/customer/login?token=mock-token-${tableId}`,
+                  qrTokenCreatedAt: new Date().toISOString(),
+                  expiresAt: new Date(
+                    Date.now() + 365 * 24 * 60 * 60 * 1000
+                  ).toISOString(),
+                },
+                qrLoading: false,
+              }
+            : t
+        )
       );
-
-      const response = await fetch(url, {
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.data) {
-        setTables((prev) =>
-          prev.map((t) =>
-            t.id === tableId
-              ? { ...t, qrCodeData: result.data, qrLoading: false }
-              : t
-          )
-        );
-      } else {
-        setTables((prev) =>
-          prev.map((t) => (t.id === tableId ? { ...t, qrLoading: false } : t))
-        );
-      }
-    } catch (error) {
-      console.error(`Error fetching QR for table ${tableId}:`, error);
-      setTables((prev) =>
-        prev.map((t) => (t.id === tableId ? { ...t, qrLoading: false } : t))
-      );
-    }
+    }, 500);
   };
 
+  // TODO: [API INTEGRATION] Kết nối API lấy danh sách bàn
+  // Endpoint: GET /api/admin/tables
+  // Headers: x-tenant-id
+  // Response: { success: true, data: [{ id, tableNumber, area, qrToken, qrTokenCreatedAt, ... }] }
   const fetchTables = async () => {
-    try {
-      setIsLoading(true);
+    // MOCK DATA - Thay thế bằng API call thực tế
+    setIsLoading(true);
 
-      const url = `${import.meta.env.VITE_BACKEND_URL}/api/admin/tables`;
-
-      const response = await fetch(url, {
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
+    // Simulate API delay
+    setTimeout(() => {
+      const mockTables = [
+        {
+          id: 1,
+          tableNumber: "1",
+          area: "Khu vực A",
+          qrToken: "mock-token-1",
+          qrTokenCreatedAt: new Date(
+            Date.now() - 7 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+          createdAt: new Date(
+            Date.now() - 30 * 24 * 60 * 60 * 1000
+          ).toISOString(),
         },
-      });
+        {
+          id: 2,
+          tableNumber: "2",
+          area: "Khu vực A",
+          qrToken: "mock-token-2",
+          qrTokenCreatedAt: new Date(
+            Date.now() - 5 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+          createdAt: new Date(
+            Date.now() - 30 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+        },
+        {
+          id: 3,
+          tableNumber: "3",
+          area: "Khu vực B",
+          qrToken: null,
+          qrTokenCreatedAt: null,
+          createdAt: new Date(
+            Date.now() - 20 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+        },
+        {
+          id: 4,
+          tableNumber: "4",
+          area: "Khu vực B",
+          qrToken: "mock-token-4",
+          qrTokenCreatedAt: new Date(
+            Date.now() - 2 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+          createdAt: new Date(
+            Date.now() - 15 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+        },
+      ];
 
-      const result = await response.json();
+      const tablesData = mockTables.map((table) => ({
+        ...table,
+        hasQR: !!table.qrToken,
+        qrGeneratedAt: table.qrTokenCreatedAt,
+        qrCodeData: null,
+        qrLoading: false,
+      }));
 
-      if (result.success) {
-        const tablesData = (result.data || []).map((table) => ({
-          ...table,
-          hasQR: !!table.qrToken,
-          qrGeneratedAt: table.qrTokenCreatedAt,
-          qrCodeData: null,
-          qrLoading: false,
-        }));
-        setTables(tablesData);
-
-        // Fetch QR codes cho các bàn có QR
-        tablesData.forEach((table) => {
-          if (table.hasQR) {
-            fetchQRForTable(table.id);
-          }
-        });
-      } else {
-        setTables([]);
-      }
-    } catch (error) {
-      console.error("Error fetching tables:", error);
-      alert("Có lỗi khi tải danh sách bàn");
-      setTables([]);
-    } finally {
+      setTables(tablesData);
       setIsLoading(false);
-    }
+
+      // Fetch QR codes cho các bàn có QR
+      tablesData.forEach((table) => {
+        if (table.hasQR) {
+          fetchQRForTable(table.id);
+        }
+      });
+    }, 800);
   };
 
+  // TODO: [FEATURE] Xem chi tiết QR code trong modal
   const handleViewQR = (table) => {
     setSelectedTable(table);
-    setShowQRModal(true);
+    // Modal sẽ tự động hiển thị khi selectedTable có giá trị trong QRDetailModal component
   };
 
+  // TODO: [FEATURE] Hiển thị modal xác nhận tạo lại QR
   const handleRegenerateQR = (table) => {
     setSelectedTable(table);
-    setShowRegenerateConfirm(true);
+    // Modal sẽ tự động hiển thị khi selectedTable có giá trị trong RegenerateConfirmModal component
   };
 
+  // TODO: [API INTEGRATION] Kết nối API tạo/tạo lại QR code
+  // Endpoint: POST /api/admin/tables/:id/qr/generate
+  // Headers: Authorization, x-tenant-id
+  // Response: { success: true, message: "...", data: { ... } }
   const confirmRegenerateQR = async () => {
-    try {
-      const url = `${import.meta.env.VITE_BACKEND_URL}/api/admin/tables/${
-        selectedTable.id
-      }/qr/generate`;
-
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Vui lòng đăng nhập lại");
-        navigate("/login");
-        return;
-      }
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-tenant-id": import.meta.env.VITE_TENANT_ID,
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const result = await response.json();
-
-      if (result.success || response.ok) {
-        setShowRegenerateConfirm(false);
-        setSelectedTable(null);
-        fetchTables();
-        alert("Đã tạo lại mã QR thành công!");
-      } else {
-        alert(result.message || "Có lỗi xảy ra khi tạo lại mã QR");
-      }
-    } catch (error) {
-      console.error("Error regenerating QR:", error);
-      alert("Có lỗi xảy ra khi tạo lại mã QR");
-    }
+    // MOCK DATA - Thay thế bằng API call thực tế
+    // Simulate API delay
+    setTimeout(() => {
+      alert(
+        `Đã tạo ${selectedTable.hasQR ? "lại" : ""} mã QR cho Bàn ${
+          selectedTable.tableNumber
+        } thành công!`
+      );
+      setSelectedTable(null);
+      fetchTables(); // Reload danh sách bàn
+    }, 500);
   };
 
+  // TODO: [FEATURE] Download QR code dạng PNG
+  // Sử dụng qrCodeData.qrCode (base64) để tải xuống
   const handleDownloadPNG = async (table) => {
     if (!table.qrCodeData?.qrCode) {
       alert("QR code chưa được tải. Vui lòng đợi...");
@@ -183,21 +189,27 @@ const QRManagementScreen = () => {
     }
   };
 
+  // TODO: [FEATURE] Download QR code dạng PDF
+  // Có thể sử dụng thư viện jsPDF hoặc gọi API backend để generate PDF
   const handleDownloadPDF = async (table) => {
-    if (!table.qrCodeUrl) {
+    if (!table.qrCodeData?.qrCode) {
       alert("Bàn này chưa có mã QR");
       return;
     }
 
     alert("Chức năng tải PDF đang được phát triển");
-    // TODO: Implement PDF generation with backend QR URL
+    // TODO: Implement PDF generation with jsPDF or backend API
   };
 
+  // TODO: [FEATURE] Download tất cả QR codes dạng PDF (batch)
+  // Có thể tạo 1 file PDF chứa nhiều QR hoặc zip nhiều file PDF
   const handleDownloadAllPDF = () => {
     alert("Chức năng tải tất cả PDF đang được phát triển");
-    // TODO: Implement batch PDF generation
+    // TODO: Implement batch PDF generation or ZIP multiple PDFs
   };
 
+  // TODO: [FEATURE] In QR code
+  // Mở cửa sổ in với template HTML chứa QR code
   const handlePrint = (table) => {
     if (!table.qrCodeData?.qrCode) {
       alert("QR code chưa được tải. Vui lòng đợi...");
@@ -286,369 +298,49 @@ const QRManagementScreen = () => {
           Quay lại danh sách bàn
         </button>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img
-              src="/images/logo.png"
-              alt="Restaurant Logo"
-              className="h-16 w-16 object-contain"
-            />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">
-                Quản Lý Mã QR
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Tổng số: {tables.filter((t) => t.hasQR).length}/{tables.length}{" "}
-                bàn có mã QR
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleDownloadAllPDF}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <Download className="w-5 h-5" />
-              Tải Tất Cả PDF
-            </button>
-
-            <div className="flex gap-2 border border-gray-300 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded ${
-                  viewMode === "grid"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <Grid className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-2 rounded ${
-                  viewMode === "list"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <List className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
+        <QRStats
+          tables={tables}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          onDownloadAll={handleDownloadAllPDF}
+        />
       </div>
 
       {/* QR Codes Display */}
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {tables.map((table) => (
-            <div
-              key={table.id}
-              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-200"
-            >
-              {/* Table Info */}
-              <div className="text-center mb-4">
-                <h3 className="text-2xl font-bold text-gray-800 mb-1">
-                  Bàn {table.tableNumber}
-                </h3>
-                <p className="text-sm text-gray-600">{table.area}</p>
-                <span
-                  className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                    table.hasQR
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-700"
-                  }`}
-                >
-                  {table.hasQR ? "Có mã QR" : "Chưa có mã QR"}
-                </span>
-              </div>
-
-              {/* QR Code Preview */}
-              {table.hasQR && (
-                <div className="flex justify-center mb-4 bg-gray-50 p-4 rounded-lg">
-                  {table.qrLoading ? (
-                    <div className="w-[180px] h-[180px] flex items-center justify-center">
-                      <div className="text-gray-500 text-sm">Đang tải...</div>
-                    </div>
-                  ) : table.qrCodeData?.qrCode ? (
-                    <img
-                      src={table.qrCodeData.qrCode}
-                      alt={`QR Code Bàn ${table.tableNumber}`}
-                      className="w-[180px] h-[180px] object-contain"
-                    />
-                  ) : (
-                    <div className="w-[180px] h-[180px] flex items-center justify-center">
-                      <QrCode className="w-16 h-16 text-gray-300" />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* QR Info */}
-              {table.qrGeneratedAt && (
-                <p className="text-xs text-gray-500 text-center mb-4">
-                  Tạo ngày:{" "}
-                  {new Date(
-                    table.qrGeneratedAt || table.createdAt
-                  ).toLocaleDateString("vi-VN")}
-                </p>
-              )}
-
-              {/* Actions */}
-              <div className="space-y-2">
-                {table.hasQR ? (
-                  <>
-                    <button
-                      onClick={() => handleViewQR(table)}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Xem Chi Tiết
-                    </button>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={() => handleDownloadPNG(table)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-xs"
-                        title="Tải PNG"
-                      >
-                        <Download className="w-4 h-4" />
-                        PNG
-                      </button>
-                      <button
-                        onClick={() => handleDownloadPDF(table)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-xs"
-                        title="Tải PDF"
-                      >
-                        <Download className="w-4 h-4" />
-                        PDF
-                      </button>
-                      <button
-                        onClick={() => handlePrint(table)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-xs"
-                        title="In"
-                      >
-                        <Printer className="w-4 h-4" />
-                        PRINT
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => handleRegenerateQR(table)}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Tạo Lại Mã QR
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => handleRegenerateQR(table)}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    Tạo Mã QR
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <QRGridView
+          tables={tables}
+          onViewQR={handleViewQR}
+          onDownloadPNG={handleDownloadPNG}
+          onDownloadPDF={handleDownloadPDF}
+          onPrint={handlePrint}
+          onRegenerateQR={handleRegenerateQR}
+        />
       ) : (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Số Bàn
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Khu Vực
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Mã QR
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Ngày Tạo
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Thao Tác
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {tables.map((table) => (
-                <tr key={table.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <span className="text-lg font-semibold">
-                      Bàn {table.tableNumber}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-700">{table.area}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        table.hasQR
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {table.hasQR ? "Có" : "Chưa có"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {table.qrGeneratedAt
-                      ? new Date(table.qrGeneratedAt).toLocaleDateString(
-                          "vi-VN"
-                        )
-                      : new Date(table.createdAt).toLocaleDateString("vi-VN")}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-2 justify-end">
-                      {table.hasQR ? (
-                        <>
-                          <button
-                            onClick={() => handleViewQR(table)}
-                            className="px-3 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 text-sm"
-                          >
-                            Xem
-                          </button>
-                          <button
-                            onClick={() => handleDownloadPDF(table)}
-                            className="px-3 py-1 bg-gray-50 text-gray-600 rounded hover:bg-gray-100 text-sm"
-                          >
-                            PDF
-                          </button>
-                          <button
-                            onClick={() => handlePrint(table)}
-                            className="px-3 py-1 bg-gray-50 text-gray-600 rounded hover:bg-gray-100 text-sm"
-                          >
-                            In
-                          </button>
-                          <button
-                            onClick={() => handleRegenerateQR(table)}
-                            className="px-3 py-1 bg-orange-50 text-orange-600 rounded hover:bg-orange-100 text-sm"
-                          >
-                            Tạo lại
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleRegenerateQR(table)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                        >
-                          Tạo QR
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <QRListView
+          tables={tables}
+          onViewQR={handleViewQR}
+          onDownloadPDF={handleDownloadPDF}
+          onPrint={handlePrint}
+          onRegenerateQR={handleRegenerateQR}
+        />
       )}
 
       {/* QR Detail Modal */}
-      {showQRModal && selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">
-                Bàn {selectedTable.tableNumber}
-              </h2>
-              <p className="text-gray-600 mb-6">{selectedTable.area}</p>
-
-              {selectedTable.qrCodeData?.qrCode ? (
-                <div className="bg-gray-50 p-6 rounded-lg mb-6 inline-block">
-                  <img
-                    src={selectedTable.qrCodeData.qrCode}
-                    alt={`QR Code Bàn ${selectedTable.tableNumber}`}
-                    className="w-[300px] h-[300px] object-contain"
-                  />
-                </div>
-              ) : (
-                <div
-                  className="bg-gray-50 p-6 rounded-lg mb-6 flex items-center justify-center"
-                  style={{ width: "300px", height: "300px" }}
-                >
-                  <div className="text-gray-500">Đang tải QR code...</div>
-                </div>
-              )}
-
-              <p className="text-sm text-gray-500 mb-6">
-                Ngày tạo:{" "}
-                {new Date(
-                  selectedTable.qrGeneratedAt || selectedTable.createdAt
-                ).toLocaleDateString("vi-VN")}
-              </p>
-
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <button
-                  onClick={() => handleDownloadPNG(selectedTable)}
-                  className="flex flex-col items-center gap-2 px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <Download className="w-6 h-6 text-gray-700" />
-                  <span className="text-xs font-medium">PNG</span>
-                </button>
-                <button
-                  onClick={() => handleDownloadPDF(selectedTable)}
-                  className="flex flex-col items-center gap-2 px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <Download className="w-6 h-6 text-gray-700" />
-                  <span className="text-xs font-medium">PDF</span>
-                </button>
-                <button
-                  onClick={() => handlePrint(selectedTable)}
-                  className="flex flex-col items-center gap-2 px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <Printer className="w-6 h-6 text-gray-700" />
-                  <span className="text-xs font-medium">In</span>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowQRModal(false)}
-                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <QRDetailModal
+        selectedTable={selectedTable}
+        onClose={() => setSelectedTable(null)}
+        onDownloadPNG={handleDownloadPNG}
+        onDownloadPDF={handleDownloadPDF}
+        onPrint={handlePrint}
+      />
 
       {/* Regenerate Confirmation Modal */}
-      {showRegenerateConfirm && selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">
-              {selectedTable.hasQR ? "Tạo Lại Mã QR?" : "Tạo Mã QR?"}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {selectedTable.hasQR
-                ? `Bạn có chắc muốn tạo lại mã QR cho Bàn ${selectedTable.tableNumber}? Mã QR cũ sẽ không còn hoạt động.`
-                : `Tạo mã QR mới cho Bàn ${selectedTable.tableNumber}?`}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowRegenerateConfirm(false);
-                  setSelectedTable(null);
-                }}
-                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmRegenerateQR}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                {selectedTable.hasQR ? "Tạo Lại" : "Tạo Mã"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RegenerateConfirmModal
+        selectedTable={selectedTable}
+        onConfirm={confirmRegenerateQR}
+        onCancel={() => setSelectedTable(null)}
+      />
     </div>
   );
 };

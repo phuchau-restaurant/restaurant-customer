@@ -1,96 +1,81 @@
-// backend/repositories/implementation/AppSettingRepository.js
+// backend/repositories/implementation/AppSettingsRepository.js
+
 import { BaseRepository } from "./BaseRepository.js";
-import { supabase } from "../../configs/database.js";
-import { AppSetting } from "../../models/AppSettings.js";
+import AppSettings from "../../models/AppSettings.js";
 
-export class AppSettingRepository extends BaseRepository {
+class AppSettingsRepository extends BaseRepository {
   constructor() {
-    // Mapping: [id, tenant_id, key, value, value_type, category, description, is_system]
-    super("app_settings", "id"); 
+    super("app_settings");
   }
 
-  async create(data) {
-    const entity = new AppSetting(data);
-    const dbPayload = entity.toPersistence(); 
-
-    const { data: result, error } = await supabase
-      .from(this.tableName)
-      .insert([dbPayload])
-      .select();
-
-    if (error) throw new Error(`[AppSetting] Create failed: ${error.message}`);
-    
-    return result?.[0] ? new AppSetting(result[0]) : null;
-  }
-
-  async update(id, updates) {
-    const entity = new AppSetting(updates);
-    const dbPayload = entity.toPersistence();
-
-    // Clean Payload: Loại bỏ các key undefined để tránh ghi đè null/default
-    Object.keys(dbPayload).forEach(key => {
-        if (dbPayload[key] === undefined) {
-            delete dbPayload[key];
-        }
+  /**
+   * Map raw data từ DB sang AppSettings model
+   */
+  mapToModel(raw) {
+    if (!raw) return null;
+    return new AppSettings({
+      id: raw.id,
+      tenantId: raw.tenant_id,
+      category: raw.category,
+      key: raw.key,
+      value: raw.value,
+      createdAt: raw.created_at,
+      updatedAt: raw.updated_at,
     });
-
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .update(dbPayload) 
-      .eq(this.primaryKey, id)
-      .select();
-
-    if (error) throw new Error(`[AppSetting] Update failed: ${error.message}`);
-    
-    return data?.[0] ? new AppSetting(data[0]) : null;
   }
 
-  async getById(id) {
-    const rawData = await super.getById(id);
-    return rawData ? new AppSetting(rawData) : null;
-  }
-
+  /**
+   * Lấy tất cả settings theo filters
+   */
   async getAll(filters = {}) {
-    const rawData = await super.getAll(filters);    
-    return rawData.map(item => new AppSetting(item));
+    const data = await super.getAll(filters);
+    return data.map((item) => this.mapToModel(item));
   }
 
   /**
-   * Tìm Setting theo Key 
-   * Ví dụ: Lấy cấu hình 'tax_rate' của tenant A
+   * Lấy setting theo ID
    */
-  async findByKey(tenantId, key) {
-    if (!tenantId) throw new Error("TenantID is required");
-
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .select("*")
-      .eq('tenant_id', tenantId)
-      .eq('key', key) // Tìm chính xác key
-      .single();
-
-    if (error && error.code !== "PGRST116") { // PGRST116 là lỗi không tìm thấy
-        throw new Error(`[AppSetting] FindByKey failed: ${error.message}`);
-    }
-    
-    return data ? new AppSetting(data) : null;
+  async getById(id) {
+    const data = await super.getById(id);
+    return this.mapToModel(data);
   }
 
   /**
-   * Tìm tất cả Settings thuộc về một Category
-   * Ví dụ: Lấy toàn bộ cấu hình thuộc nhóm 'Printer'
+   * Tạo setting mới
    */
-  async findByCategory(tenantId, category) {
-    if (!tenantId) throw new Error("TenantID is required");
+  async create(settingData) {
+    const dbData = {
+      tenant_id: settingData.tenantId,
+      category: settingData.category,
+      key: settingData.key,
+      value: settingData.value,
+    };
 
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .select("*")
-      .eq('tenant_id', tenantId)
-      .eq('category', category);
+    const created = await super.create(dbData);
+    return this.mapToModel(created);
+  }
 
-    if (error) throw new Error(`[AppSetting] FindByCategory failed: ${error.message}`);
+  /**
+   * Cập nhật setting
+   */
+  async update(id, updateData) {
+    const dbData = {};
 
-    return data.map(item => new AppSetting(item));
+    if (updateData.category !== undefined)
+      dbData.category = updateData.category;
+    if (updateData.key !== undefined) dbData.key = updateData.key;
+    if (updateData.value !== undefined) dbData.value = updateData.value;
+
+    const updated = await super.update(id, dbData);
+    return this.mapToModel(updated);
+  }
+
+  /**
+   * Xóa setting
+   */
+  async delete(id) {
+    return await super.delete(id);
   }
 }
+
+export default AppSettingsRepository;

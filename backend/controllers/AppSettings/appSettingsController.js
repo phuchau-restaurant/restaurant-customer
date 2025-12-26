@@ -5,32 +5,29 @@ class AppSettingsController {
     this.appSettingsService = appSettingsService;
   }
 
-  // [GET] /api/settings?category=Printer
+  // [GET] /api/appsettings?category=avatar
   getAll = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
       const { category } = req.query;
 
-      const data = await this.appSettingsService.getSettingsByTenant(tenantId, category);
-
-      // Clean Response (Array .map)
-      const returnData = data.map(item => {
-        const { id, tenantId, ...rest } = item;
-        return rest;
-      });
+      const data = await this.appSettingsService.getSettingsByTenant(
+        tenantId,
+        category
+      );
 
       return res.status(200).json({
         success: true,
         message: "Settings fetched successfully",
-        total: returnData.length,
-        data: returnData
+        total: data.length,
+        data: data,
       });
     } catch (error) {
       next(error);
     }
-  }
+  };
 
-  // [GET] /api/settings/:id
+  // [GET] /api/appsettings/:id
   getById = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
@@ -38,65 +35,64 @@ class AppSettingsController {
 
       const data = await this.appSettingsService.getSettingById(id, tenantId);
 
-      // Clean Response (Destructuring)
-      const { id: _id, tenantId: _tid, ...returnData } = data;
-
       return res.status(200).json({
         success: true,
         message: "Setting fetched successfully",
-        data: returnData
+        data: data,
       });
     } catch (error) {
       if (error.message.includes("not found")) error.statusCode = 404;
       else if (error.message.includes("Access denied")) error.statusCode = 403;
+
       next(error);
     }
-  }
+  };
 
-  // [POST] /api/settings
+  // [POST] /api/appsettings
   create = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
+
       const newSetting = await this.appSettingsService.createSetting({
         ...req.body,
-        tenantId: tenantId // Force TenantID
+        tenantId: tenantId,
       });
-
-      const { id: _id, tenantId: _tid, ...returnData } = newSetting;
 
       return res.status(201).json({
         success: true,
-        message: "App setting created successfully",
-        data: returnData
+        message: "Setting created successfully",
+        data: newSetting,
       });
     } catch (error) {
       error.statusCode = 400;
       next(error);
     }
-  }
+  };
 
-  // [PUT] /api/settings/:id
+  // [PUT] /api/appsettings/:id
   update = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
       const { id } = req.params;
 
-      const updatedSetting = await this.appSettingsService.updateSetting(id, tenantId, req.body);
-
-      const { id: _id, tenantId: _tid, ...returnData } = updatedSetting;
+      const updatedSetting = await this.appSettingsService.updateSetting(
+        id,
+        tenantId,
+        req.body
+      );
 
       return res.status(200).json({
         success: true,
-        message: "App setting updated successfully",
-        data: returnData
+        message: "Setting updated successfully",
+        data: updatedSetting,
       });
     } catch (error) {
       error.statusCode = 400;
       next(error);
     }
-  }
+  };
 
-  // [DELETE] /api/settings/:id
+  // [DELETE] /api/appsettings/:id
   delete = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
@@ -106,13 +102,13 @@ class AppSettingsController {
 
       return res.status(200).json({
         success: true,
-        message: "App setting deleted successfully"
+        message: "Setting deleted successfully",
       });
     } catch (error) {
       error.statusCode = 400;
       next(error);
     }
-  }
+  };
 }
 
 export default AppSettingsController;

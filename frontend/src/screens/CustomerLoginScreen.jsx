@@ -29,75 +29,44 @@ const CustomerLoginScreen = () => {
   const [tableInfo, setTableInfo] = useState(null);
   const [tokenVerified, setTokenVerified] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [qrToken, setQrToken] = useState(null);
 
-  // --- LOGIC GIỮ NGUYÊN ---
+  // Kiểm tra QR token trong URL
   React.useEffect(() => {
-    let timeoutId;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
 
-    const verifyQRToken = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
+    if (!token) {
+      showWarning("Vui lòng quét mã QR để truy cập!");
+      setTimeout(() => navigate("/"), 2000);
+      return;
+    }
 
-      if (!token) {
-        showWarning("Vui lòng quét mã QR để truy cập!");
-        setTimeout(() => navigate("/"), 2000);
-        return;
+    // Nếu có token, lưu lại và cho phép đăng nhập
+    setQrToken(token);
+    setTokenVerified(true);
+
+    // Decode JWT để lấy thông tin bàn (không cần verify server vì JWT đã mã hóa)
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setTableInfo({
+        tableId: payload.tableId,
+        tableNumber: `Bàn ${payload.tableId}`,
+      });
+      updateTable({
+        id: payload.tableId,
+        number: `Bàn ${payload.tableId}`,
+      });
+
+      // Lưu tenantId vào localStorage
+      if (payload.tenantId) {
+        localStorage.setItem("tenantId", payload.tenantId);
       }
+    } catch (err) {
+      console.error("Failed to decode token:", err);
+      setTableInfo({ tableNumber: "Không xác định" });
+    }
 
-      timeoutId = setTimeout(() => {
-        if (!tokenVerified) {
-          setIsLoading(false);
-          showError("Xác thực QR code quá lâu! Vui lòng quét lại mã QR.");
-          setTimeout(() => navigate("/"), 2000);
-        }
-      }, 10000);
-
-      try {
-        setIsLoading(true);
-        const response = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/admin/qr/verify`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ token }),
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          clearTimeout(timeoutId);
-          showError(data.message || "QR code không hợp lệ hoặc đã hết hạn!");
-          setTimeout(() => navigate("/"), 2000);
-          return;
-        }
-
-        clearTimeout(timeoutId);
-        setTableInfo(data.data);
-        updateTable({
-          id: data.data.tableId,
-          number: data.data.tableNumber,
-        });
-        setTokenVerified(true);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error("QR verify error:", error);
-        showError("Không thể xác thực QR code!");
-        setTimeout(() => navigate("/"), 2000);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    verifyQRToken();
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -152,7 +121,7 @@ const CustomerLoginScreen = () => {
 
       setTimeout(() => {
         login(data.data);
-        navigate("/customer/menu");
+        navigate("/menu");
       }, 800);
     } catch (error) {
       console.error("Login error:", error);
@@ -221,25 +190,45 @@ const CustomerLoginScreen = () => {
       {/* Background Blobs - Di chuyển chậm và mượt hơn */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
-          animate={isExiting ? { scale: 0, opacity: 0, rotate: 180, x: 0, y: 0 } : { x: [0, 50, 0], y: [0, -30, 0], scale: [1, 1.1, 1] }}
-          transition={isExiting ? { duration: 0.8, ease: "easeInOut" } : { duration: 15, repeat: Infinity, ease: "linear" }}
+          animate={
+            isExiting
+              ? { scale: 0, opacity: 0, rotate: 180, x: 0, y: 0 }
+              : { x: [0, 50, 0], y: [0, -30, 0], scale: [1, 1.1, 1] }
+          }
+          transition={
+            isExiting
+              ? { duration: 0.8, ease: "easeInOut" }
+              : { duration: 15, repeat: Infinity, ease: "linear" }
+          }
           className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-orange-200/40 rounded-full blur-3xl"
         />
         <motion.div
-          animate={isExiting ? { scale: 0, opacity: 0, rotate: -180, x: 0, y: 0 } : { x: [0, -30, 0], y: [0, 50, 0], scale: [1, 1.2, 1] }}
-          transition={isExiting ? { duration: 0.8, ease: "easeInOut" } : { duration: 18, repeat: Infinity, ease: "linear" }}
+          animate={
+            isExiting
+              ? { scale: 0, opacity: 0, rotate: -180, x: 0, y: 0 }
+              : { x: [0, -30, 0], y: [0, 50, 0], scale: [1, 1.2, 1] }
+          }
+          transition={
+            isExiting
+              ? { duration: 0.8, ease: "easeInOut" }
+              : { duration: 18, repeat: Infinity, ease: "linear" }
+          }
           className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-yellow-200/40 rounded-full blur-3xl"
         />
       </div>
 
-      <motion.div 
+      <motion.div
         className="relative bg-white/80 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 border border-orange-100/50 z-10"
-        animate={isExiting ? { 
-          scale: 0,
-          opacity: 0,
-          rotate: 360,
-          filter: "blur(10px)"
-        } : { scale: 1, opacity: 1, rotate: 0, filter: "blur(0px)" }}
+        animate={
+          isExiting
+            ? {
+                scale: 0,
+                opacity: 0,
+                rotate: 360,
+                filter: "blur(10px)",
+              }
+            : { scale: 1, opacity: 1, rotate: 0, filter: "blur(0px)" }
+        }
         transition={{ duration: 0.8, ease: "easeInOut" }}
       >
         {/* LEFT - Visual Animation Zone */}
@@ -328,10 +317,12 @@ const CustomerLoginScreen = () => {
           </motion.div>
 
           {/* CENTRAL LOGO */}
-          <motion.div 
-            className="relative z-10" 
+          <motion.div
+            className="relative z-10"
             layoutId="app-logo"
-            animate={isExiting ? { rotate: 360, scale: 0.5 } : { rotate: 0, scale: 1 }}
+            animate={
+              isExiting ? { rotate: 360, scale: 0.5 } : { rotate: 0, scale: 1 }
+            }
             transition={{ duration: 0.8, ease: "easeInOut" }}
           >
             <div className="relative inline-block group">
@@ -387,7 +378,7 @@ const CustomerLoginScreen = () => {
         </motion.div>
 
         {/* RIGHT - Login Form */}
-        <motion.div 
+        <motion.div
           className="p-12 flex flex-col justify-center bg-white relative"
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}

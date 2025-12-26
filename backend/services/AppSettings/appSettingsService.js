@@ -1,103 +1,87 @@
 // backend/services/AppSettings/appSettingsService.js
 
 class AppSettingsService {
-  constructor(appSettingRepository) {
-    this.appSettingRepo = appSettingRepository;
+  constructor(appSettingsRepository) {
+    this.appSettingsRepo = appSettingsRepository;
   }
 
   /**
-   * Lấy danh sách settings
-   * Get/api/settings(?category=Printer)
+   * Lấy danh sách settings theo tenant và category
    */
   async getSettingsByTenant(tenantId, category = null) {
-    if (!tenantId) throw new Error("Tenant ID is required");
+    if (!tenantId) throw new Error("Missing tenantId");
+
+    const filters = { tenant_id: tenantId };
+
     if (category) {
-      return await this.appSettingRepo.findByCategory(tenantId, category);
+      filters.category = category;
     }
-    return await this.appSettingRepo.getAll({ tenant_id: tenantId });
+
+    return await this.appSettingsRepo.getAll(filters);
   }
 
+  /**
+   * Lấy setting theo ID
+   */
   async getSettingById(id, tenantId) {
-    if (!id) throw new Error("ID is required");
+    if (!id) throw new Error("Setting ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
 
-    const setting = await this.appSettingRepo.getById(id);
-    if (!setting) throw new Error("App setting not found");
+    const setting = await this.appSettingsRepo.getById(id);
 
-    if (tenantId && setting.tenantId !== tenantId) {
-      throw new Error("Access denied: Setting belongs to another tenant");
+    if (!setting) {
+      throw new Error(`Setting with ID ${id} not found`);
     }
+
+    if (setting.tenantId !== tenantId) {
+      throw new Error("Access denied: Setting does not belong to this tenant");
+    }
+
     return setting;
   }
 
   /**
-   * Tạo Setting mới
-   * Rule: Key phải duy nhất trong Tenant
+   * Tạo setting mới
    */
-  async createSetting(data) {
-    const { tenantId, key, value, valueType, category, isSystem = false } = data;
-
-    //  Validate 
+  async createSetting({ tenantId, category, key, value }) {
     if (!tenantId) throw new Error("Tenant ID is required");
+    if (!category || category.trim() === "")
+      throw new Error("Category is required");
     if (!key || key.trim() === "") throw new Error("Key is required");
-    if (!value) throw new Error("Value is required");
-    if (!valueType) throw new Error("Value Type is required");
-    if (!category) throw new Error("Category is required");
+    if (!value || value.trim() === "") throw new Error("Value is required");
 
-    //  Check same Key
-    const existing = await this.appSettingRepo.findByKey(tenantId, key.trim());
-    if (existing) {
-      throw new Error(`Setting with key '${key}' already exists`);
-    }
-
-    //  Prepare data (camelCase)
-    const newSettingData = {
+    return await this.appSettingsRepo.create({
       tenantId,
+      category: category.trim(),
       key: key.trim(),
-      value,
-      valueType,
-      category,
-      description: data.description,
-      isSystem
-    };
-
-    return await this.appSettingRepo.create(newSettingData);
+      value: value.trim(),
+    });
   }
 
   /**
-   * Update Setting
-   * Rule: nếu đổi key, bắt buộc check trùng
+   * Cập nhật setting
    */
-  async updateSetting(id, tenantId, updates) {
-    // 1. Check ownership
-    const currentSetting = await this.getSettingById(id, tenantId);
+  async updateSetting(id, tenantId, updateData) {
+    if (!id) throw new Error("Setting ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
 
-    // 2. Nếu User cố tình đổi Key -> Phải check trùng
-    if (updates.key && updates.key !== currentSetting.key) {
-        // Cấm đổi key của System Setting
-        if (currentSetting.isSystem) throw new Error("Cannot change key of a system setting");
+    // Kiểm tra setting tồn tại và thuộc tenant
+    await this.getSettingById(id, tenantId);
 
-        const existing = await this.appSettingRepo.findByKey(tenantId, updates.key.trim());
-        if (existing && existing.id !== id) {
-            throw new Error(`Key '${updates.key}' is already used by another setting`);
-        }
-    }
-
-    return await this.appSettingRepo.update(id, updates);
+    return await this.appSettingsRepo.update(id, updateData);
   }
 
   /**
-   * Xóa Setting
-   * Rule: Không được xóa Setting hệ thống (isSystem = true)
+   * Xóa setting
    */
   async deleteSetting(id, tenantId) {
-    const setting = await this.getSettingById(id, tenantId);
+    if (!id) throw new Error("Setting ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
 
-    // Bảo vệ Setting hệ thống
-    if (setting.isSystem) {
-      throw new Error("Cannot delete a system setting. You can only update its value.");
-    }
+    // Kiểm tra setting tồn tại và thuộc tenant
+    await this.getSettingById(id, tenantId);
 
-    return await this.appSettingRepo.delete(id);
+    return await this.appSettingsRepo.delete(id);
   }
 }
 

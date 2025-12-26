@@ -8,6 +8,12 @@ import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
 import { useAlert } from "../hooks/useAlert";
+import {
+  fetchCategories,
+  fetchMenus,
+  fetchAvatarUrls,
+  submitOrder,
+} from "../services/menuService";
 
 const defaultCustomer = {
   name: "Khách hàng",
@@ -37,109 +43,23 @@ const MenuScreen = () => {
       return;
     }
 
-    // Fetch categories
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/categories`,
-          {
-            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-          }
-        );
+    // Load initial data
+    const loadInitialData = async () => {
+      // Fetch categories
+      const { categories: cats, categoryIdMap: idMap } = await fetchCategories();
+      setCategories(cats);
+      setCategoryIdMap(idMap);
 
-        const json = await res.json();
+      // Fetch avatar URLs
+      const avatars = await fetchAvatarUrls();
+      setAvatarUrl(avatars);
 
-        if (json.success) {
-          const mappedCategories = [
-            {
-              id: "0",
-              name: "All",
-              iconUrl: null,
-              categoryId: null,
-            },
-          ];
-
-          const idMap = {};
-
-          json.data
-            .filter((cat) => cat.isActive)
-            .sort((a, b) => a.displayOrder - b.displayOrder)
-            .forEach((cat) => {
-              const catId = cat.name.toLowerCase().replace(/\s+/g, "-");
-              mappedCategories.push({
-                id: catId,
-                name: cat.name,
-                iconUrl: cat.urlIcon,
-                categoryId: cat.id,
-              });
-              idMap[catId] = cat.id;
-            });
-
-          setCategories(mappedCategories);
-          setCategoryIdMap(idMap);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi fetch categories:", err);
-        setCategories([
-          { id: "all", name: "Tất cả", iconUrl: null, categoryId: null },
-        ]);
-      }
+      // Fetch initial menus
+      const products = await fetchMenus();
+      setProducts(products);
     };
 
-    const fetchUrlAvatar = async () => {
-      try {
-        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/appsettings`;
-        const url = new URL(baseUrl);
-
-        const res = await fetch(url.toString(), {
-          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-        });
-
-        const json = await res.json();
-        if (!json.success) throw new Error("Lấy app settings thất bại");
-
-        // Lọc và map thành mảng URL
-        const avatarSettings = json.data
-          .filter((setting) => setting.category === "avatar")
-          .map((setting) => setting.value);
-
-        setAvatarUrl(avatarSettings);
-      } catch (err) {
-        console.error("❌ Lỗi fetch avatar:", err);
-      }
-    };
-
-    // Fetch menu lần đầu tiên khi mount
-    const fetchInitialMenus = async () => {
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/menus`,
-          {
-            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-          }
-        );
-
-        const json = await res.json();
-        if (json.success) {
-          const mapped = json.data.map((item, index) => ({
-            id: item.id || index + 1,
-            name: item.name,
-            description: item.description || "Không có mô tả",
-            price: item.price,
-            category: "0", // Default category for initial load
-            imgUrl: item.imgUrl,
-            isAvailable: item.isAvailable,
-          }));
-          setProducts(mapped);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi fetch initial menus:", err);
-      }
-    };
-
-    fetchUrlAvatar();
-    fetchCategories();
-    fetchInitialMenus();
+    loadInitialData();
   }, []);
 
   // Fetch menus based on active category
@@ -147,45 +67,19 @@ const MenuScreen = () => {
     // Bỏ qua lần render đầu tiên (activeCategory = "all")
     if (activeCategory === "all") return;
 
-    const fetchMenus = async () => {
+    const loadMenusByCategory = async () => {
       setIsLoadingMenu(true);
       try {
-        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/menus`;
-        const url = new URL(baseUrl);
-
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
-        if (activeCategory !== "0") {
-          const categoryId = categoryIdMap[activeCategory];
-          if (categoryId) {
-            url.searchParams.append("categoryId", categoryId);
-          }
-        }
-
-        const res = await fetch(url.toString(), {
-          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+        const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
+        
+        const products = await fetchMenus({
+          categoryId,
+          categories,
+          activeCategory,
         });
-
-        const json = await res.json();
-
-        if (!json.success) throw new Error("Lấy menu thất bại");
-
-        // Tìm category name từ categoryId
-        const getCategoryNameById = (catId) => {
-          const found = categories.find((c) => c.categoryId === catId);
-          return found ? found.id : activeCategory;
-        };
-
-        const mapped = json.data.map((item, index) => ({
-          id: item.id || index + 1,
-          name: item.name,
-          description: item.description || "Không có mô tả",
-          price: item.price,
-          category: getCategoryNameById(item.categoryId),
-          imgUrl: item.imgUrl,
-          isAvailable: item.isAvailable,
-        }));
-
-        setProducts(mapped);
+        
+        setProducts(products);
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
       } finally {
@@ -195,48 +89,18 @@ const MenuScreen = () => {
 
     // Gọi API khi chọn "0" (Tất cả) hoặc khi có categoryId hợp lệ
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
-      fetchMenus();
+      loadMenusByCategory();
     }
   }, [activeCategory, categoryIdMap, categories]);
 
-  // Submit order (giữ nguyên)
-  const submitOrder = async () => {
+  // Submit order handler
+  const handleSubmitOrder = async () => {
     try {
-      const payload = {
+      await submitOrder({
         tableId: tableInfo.id,
         customerId: 1,
-        dishes: cart.map((item) => ({
-          dishId: item.id,
-          quantity: item.qty,
-          description: item.name,
-          note: item.note?.trim() || null,
-        })),
-      };
-
-      const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/orders`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const raw = await response.text();
-
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch (e) {
-        throw new Error("API trả về HTML thay vì JSON.");
-      }
-
-      if (!response.ok) {
-        throw new Error(result.message || "Gửi đơn hàng thất bại");
-      }
+        dishes: cart,
+      });
 
       showSuccess("Đặt món thành công!");
       setCart([]);
@@ -530,7 +394,7 @@ const MenuScreen = () => {
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             }`}
             disabled={cart.length === 0}
-            onClick={submitOrder}
+            onClick={handleSubmitOrder}
           >
             Đặt món ngay
           </button>

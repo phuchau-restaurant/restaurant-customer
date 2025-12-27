@@ -7,6 +7,7 @@ import { ShoppingCart, Utensils, LogOut } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
+import ImageGalleryModal from "../components/Modal/ImageGalleryModal";
 import { useAlert } from "../hooks/useAlert";
 import {
   fetchCategories,
@@ -14,11 +15,6 @@ import {
   fetchAvatarUrls,
   submitOrder,
 } from "../services/menuService";
-
-const defaultCustomer = {
-  name: "Khách hàng",
-  loyaltyPoints: 0,
-};
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -33,8 +29,10 @@ const MenuScreen = () => {
   const [categoryIdMap, setCategoryIdMap] = useState({});
   const [avatarUrl, setAvatarUrl] = useState([]);
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
+  const [galleryProduct, setGalleryProduct] = useState(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Fetch categories and menu
+  // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
     // Kiểm tra đã login và có thông tin bàn chưa
     if (!tableInfo || !tableInfo.id) {
@@ -43,7 +41,7 @@ const MenuScreen = () => {
       return;
     }
 
-    // Load initial data
+    // Load initial data (categories + avatars only)
     const loadInitialData = async () => {
       // Fetch categories
       const { categories: cats, categoryIdMap: idMap } = await fetchCategories();
@@ -53,20 +51,19 @@ const MenuScreen = () => {
       // Fetch avatar URLs
       const avatars = await fetchAvatarUrls();
       setAvatarUrl(avatars);
-
-      // Fetch initial menus
-      const products = await fetchMenus();
-      setProducts(products);
+      
+      // Đánh dấu đã load xong categories
+      setIsInitialLoad(false);
     };
 
     loadInitialData();
   }, []);
 
-  // Fetch menus based on active category
+  // Fetch menus based on active category (chỉ sau khi đã có categories)
   useEffect(() => {
-    // Bỏ qua lần render đầu tiên (activeCategory = "all")
-    if (activeCategory === "all") return;
-
+    // Chờ cho đến khi categories đã load xong
+    if (isInitialLoad) return;
+    
     const loadMenusByCategory = async () => {
       setIsLoadingMenu(true);
       try {
@@ -91,7 +88,7 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad]);
 
   // Submit order handler
   const handleSubmitOrder = async () => {
@@ -128,22 +125,45 @@ const MenuScreen = () => {
   // Cart actions
   const addToCart = (product) => {
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      // Tạo unique key từ product id + modifiers để phân biệt cùng món nhưng khác modifiers
+      const modifiersKey = product.selectedModifiers
+        ?.map((m) => m.optionId)
+        .sort()
+        .join("-") || "";
+      const cartItemKey = `${product.id}-${modifiersKey}`;
+      
+      const existing = prev.find((item) => item.cartItemKey === cartItemKey);
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+          item.cartItemKey === cartItemKey ? { ...item, qty: item.qty + 1 } : item
         );
       }
-      return [...prev, { ...product, qty: 1, note: "" }];
+      return [
+        ...prev,
+        {
+          ...product,
+          cartItemKey,
+          qty: 1,
+          note: "",
+        },
+      ];
     });
   };
 
-  const removeFromCart = (productId) => {
+  const removeFromCart = (productId, cartItemKey = null) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === productId ? { ...item, qty: item.qty - 1 } : item
-        )
+        .map((item) => {
+          // Nếu có cartItemKey, dùng nó để xác định item
+          if (cartItemKey && item.cartItemKey === cartItemKey) {
+            return { ...item, qty: item.qty - 1 };
+          }
+          // Fallback: dùng productId
+          if (!cartItemKey && item.id === productId) {
+            return { ...item, qty: item.qty - 1 };
+          }
+          return item;
+        })
         .filter((item) => item.qty > 0)
     );
   };
@@ -158,22 +178,26 @@ const MenuScreen = () => {
     }
   };
 
-  const updateItemNote = (itemId, note) => {
+  const updateItemNote = (itemId, note, cartItemKey = null) => {
     setCart((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, note } : item))
+      prev.map((item) => {
+        if (cartItemKey && item.cartItemKey === cartItemKey) {
+          return { ...item, note };
+        }
+        if (!cartItemKey && item.id === itemId) {
+          return { ...item, note };
+        }
+        return item;
+      })
     );
   };
 
   const totalAmount = cart.reduce(
-    (sum, item) => sum + item.price * item.qty,
+    (sum, item) => sum + (item.totalPrice || item.price) * item.qty,
     0
   );
   const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
 
-  const getItemQuantity = (productId) => {
-    const item = cart.find((i) => i.id === productId);
-    return item ? item.qty : 0;
-  };
   return (
     <motion.div
       className="flex h-screen bg-linear-to-br from-amber-50 via-orange-50 to-red-50 font-sans overflow-hidden relative select-none"
@@ -279,7 +303,7 @@ const MenuScreen = () => {
         </motion.header>
 
         <motion.div
-          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr pb-6"
+          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
@@ -306,10 +330,8 @@ const MenuScreen = () => {
               >
                 <MenuItem
                   product={product}
-                  quantity={getItemQuantity(product.id)}
-                  onAdd={() => addToCart(product)}
-                  onRemove={() => removeFromCart(product.id)}
-                  onQuantityChange={setQuantity}
+                  onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
+                  onImageClick={(product) => setGalleryProduct(product)}
                 />
               </motion.div>
             ))
@@ -369,10 +391,10 @@ const MenuScreen = () => {
           ) : (
             cart.map((item) => (
               <CartItem
-                key={item.id}
+                key={item.cartItemKey || item.id}
                 item={item}
                 onAdd={() => addToCart(item)}
-                onRemove={() => removeFromCart(item.id)}
+                onRemove={() => removeFromCart(item.id, item.cartItemKey)}
                 onQuantityChange={setQuantity}
                 onNoteChange={updateItemNote}
               />
@@ -409,6 +431,17 @@ const MenuScreen = () => {
         message={alert.message}
         type={alert.type}
       />
+
+      {/* Image Gallery Modal - Full Screen */}
+      {galleryProduct && (
+        <ImageGalleryModal
+          key={galleryProduct.id}
+          isOpen={!!galleryProduct}
+          onClose={() => setGalleryProduct(null)}
+          images={galleryProduct.photos || []}
+          initialIndex={0}
+        />
+      )}
     </motion.div>
   );
 };

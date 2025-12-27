@@ -144,7 +144,7 @@ export const fetchSettingsByCategory = async (category) => {
 export const fetchDishPhotos = async (dishId) => {
   try {
     const response = await fetch(
-      `${BASE_URL}/api/admin/menu/items/photos?dishId=${dishId}`,
+      `${BASE_URL}/api/items/photos?dishId=${dishId}`,
       {
         headers: getHeaders(),
       }
@@ -168,14 +168,14 @@ export const fetchDishPhotos = async (dishId) => {
 
 /**
  * Fetch modifier groups by dish ID
- * GET /api/admin/menu/modifier-groups/:dishId
+ * GET /api/menu-item-modifier-group/full?dishId=...
  * @param {number} dishId - Dish ID
- * @returns {Promise<Array>} Array of modifier groups
+ * @returns {Promise<Array>} Array of modifier groups with options
  */
 export const fetchModifierGroups = async (dishId) => {
   try {
     const response = await fetch(
-      `${BASE_URL}/api/admin/menu/modifier-groups/${dishId}`,
+      `${BASE_URL}/api/menu-item-modifier-group/?dishId=${dishId}`,
       {
         headers: getHeaders(),
       }
@@ -204,14 +204,24 @@ export const fetchModifierGroups = async (dishId) => {
  */
 export const fetchDishDetails = async (dish) => {
   try {
-    const [photos, modifierGroups] = await Promise.all([
-      fetchDishPhotos(dish.id),
-      fetchModifierGroups(dish.id),
+    const dishId = dish.id;
+    
+    const [photosResult, modifierGroups] = await Promise.all([
+      fetchDishPhotos(dishId),
+      fetchModifierGroups(dishId),
     ]);
+
+    // API đã trả về photos theo dishId, không cần filter lại
+    // Chỉ sắp xếp ảnh: isPrimary = true lên đầu
+    const sortedPhotos = [...photosResult].sort((a, b) => {
+      if (a.isPrimary && !b.isPrimary) return -1;
+      if (!a.isPrimary && b.isPrimary) return 1;
+      return 0;
+    });
 
     return {
       ...dish,
-      photos,
+      photos: sortedPhotos,
       modifierGroups,
     };
   } catch (error) {
@@ -294,7 +304,7 @@ export const fetchMenus = async ({
       mapMenuItem(item, index, getCategoryNameById)
     );
 
-    // Fetch details for all dishes in parallel
+    // Fetch details cho từng dish song song
     const dishesWithDetails = await Promise.all(
       mapped.map((dish) => fetchDishDetails(dish))
     );

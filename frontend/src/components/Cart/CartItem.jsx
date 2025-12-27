@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Tag } from "lucide-react";
 
 const CartItem = ({ item, onAdd, onRemove, onQuantityChange, onNoteChange }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -47,8 +47,30 @@ const CartItem = ({ item, onAdd, onRemove, onQuantityChange, onNoteChange }) => 
           <h4 className="text-sm font-semibold text-gray-800 truncate">
             {item.name}
           </h4>
+          {/* Hiển thị modifiers đã chọn */}
+          {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {item.selectedModifiers.map((mod, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-0.5 text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full"
+                >
+                  <Tag size={8} />
+                  {mod.optionName}
+                  {mod.price > 0 && (
+                    <span className="text-orange-500">+{mod.price.toLocaleString("vi-VN")}đ</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-gray-500">
-            {item.price.toLocaleString("vi-VN")}₫
+            {(item.totalPrice || item.price).toLocaleString("vi-VN")}₫
+            {item.modifiersPrice > 0 && (
+              <span className="text-orange-500 ml-1">
+                (gốc {item.price.toLocaleString("vi-VN")}đ + {item.modifiersPrice.toLocaleString("vi-VN")}đ)
+              </span>
+            )}
           </p>
             <input
             type="text"
@@ -56,7 +78,7 @@ const CartItem = ({ item, onAdd, onRemove, onQuantityChange, onNoteChange }) => 
             onChange={(e) => {
               const value = e.target.value;
               if (value.length <= 50) {
-                onNoteChange?.(item.id, value);
+                onNoteChange?.(item.id, value, item.cartItemKey);
               }
             }}
             placeholder="Ghi chú (vd: không hành, ít đá...)"

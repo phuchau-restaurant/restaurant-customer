@@ -15,6 +15,7 @@ import ordersRoutes from "./routers/orders.routes.js";
 import appSettingsRoutes from "./routers/appSettings.routes.js";
 import modifiersRoutes from "./routers/modifiers.routes.js";
 import menuItemModifierGroupRoutes from "./routers/menuItemModifierGroup.routes.js";
+import menuItemPhotoRoutes from "./routers/menuItemPhoto.routes.js";
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -43,6 +44,7 @@ app.use("/api/orders", ordersRoutes);
 app.use("/api/appsettings", appSettingsRoutes);
 app.use("/api", modifiersRoutes);
 app.use("/api/menu-item-modifier-group", menuItemModifierGroupRoutes);
+app.use("/api/items", menuItemPhotoRoutes);
 // Route kiểm tra server sống hay chết
 app.get("/", (req, res) => {
   res.send("🍽️ Customer App - Server is running...");

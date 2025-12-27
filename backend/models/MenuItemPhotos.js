@@ -1,4 +1,4 @@
-// backend/models/MenuItemPhotos.js
+// restaurant-staff/backend/models/MenuItemPhotos.js
 export class MenuItemPhoto {
   constructor(data) {
     this.id = data.id;
@@ -14,16 +14,6 @@ export class MenuItemPhoto {
       url: this.url,
       is_primary: this.isPrimary,
       created_at: this.createdAt
-    };
-  }
-
-  toResponse() {
-    return {
-      id: this.id,
-      dishId: this.dishId,
-      url: this.url,
-      isPrimary: this.isPrimary,
-      createdAt: this.createdAt
     };
   }
 }

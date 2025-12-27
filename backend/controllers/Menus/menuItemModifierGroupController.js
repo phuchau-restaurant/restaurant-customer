@@ -41,12 +41,12 @@ class MenuItemModifierGroupController {
       let result;
       if (groupId) {
         result = await this.service.findLink(dishId, groupId);
-        result = result.map((r) => r.toResponse());
       } else {
-        // Lấy modifiers đầy đủ cho dish
-        result = await this.service.getModifiersByDishId(dishId);
+        result = await this.service.findByDishId(dishId);
       }
-      res.status(200).json({ success: true, data: result });
+      res
+        .status(200)
+        .json({ success: true, data: result.map((r) => r.toResponse()) });
     } catch (error) {
       error.statusCode = 400;
       next(error);

@@ -21,9 +21,29 @@ class MenuItemModifierGroupService {
     return await this.repo.find(dishId, groupId);
   }
 
-  // Tìm tất cả group liên quan đến dishId
+  // Tìm tất cả group liên quan đến dishId (trả về đủ thông tin group và options)
   async findByDishId(dishId) {
-    return await this.repo.findByDishId(dishId);
+    const rawData = await this.repo.findByDishId(dishId);
+    return rawData.map((item) => {
+      const group = item.modifier_groups;
+      return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        minSelections: group.min_selections,
+        maxSelection: group.max_selection,
+        isRequired: group.is_required,
+        isActive: group.is_active,
+        options: (group.modifier_options || []).map((opt) => ({
+          id: opt.id,
+          name: opt.name,
+          price: opt.price_adjustment,
+          isActive: opt.is_active,
+          isDefault: opt.is_default,
+          createdAt: opt.created_at,
+        })),
+      };
+    });
   }
 }
 

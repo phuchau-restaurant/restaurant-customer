@@ -10,5 +10,7 @@ router.post("/", menuItemModifierGroupController.addLink);
 router.delete("/", menuItemModifierGroupController.removeLink);
 // Tìm kiếm liên kết (có thể chỉ truyền dishId để lấy hết group liên quan)
 router.get("/", menuItemModifierGroupController.findLink);
+// Lấy đầy đủ thông tin group và options cho dishId
+router.get("/full", menuItemModifierGroupController.getFullModifiersByDishId);
 
 export default router;

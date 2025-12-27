@@ -214,7 +214,7 @@ const MenuScreen = () => {
       )}
 
       <motion.div
-        className="w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-sm z-10"
+        className="w-24 sm:w-28 md:w-30 bg-white border-r flex flex-col items-center py-4 sm:py-6 space-y-2 sm:space-y-4 shadow-sm z-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.2 }}
@@ -223,7 +223,7 @@ const MenuScreen = () => {
           layoutId="app-logo"
           src="/images/logo.png"
           alt="Logo"
-          className="w-20 h-20 object-contain mb-4"
+          className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain mb-2 sm:mb-4"
           transition={{ duration: 0.6, ease: "easeInOut" }}
         />
         {categories.map((cat, index) => (
@@ -233,7 +233,7 @@ const MenuScreen = () => {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.3 + index * 0.05 }}
             onClick={() => setActiveCategory(cat.id)}
-            className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-300 ${
+            className={`flex flex-col items-center justify-center w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-xl transition-all duration-300 ${
               activeCategory === cat.id
                   ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105"
                   : "text-gray-400"
@@ -245,7 +245,7 @@ const MenuScreen = () => {
                 <img
                   src={cat.iconUrl}
                   alt={cat.name}
-                  className="w-8 h-8 object-contain"
+                  className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 object-contain"
                   style={{
                     filter:
                       activeCategory === cat.id
@@ -257,7 +257,7 @@ const MenuScreen = () => {
                 <Utensils size={20} />
               )}
             </div>
-            <span className="text-[12px] font-bold">{cat.name}</span>
+            <span className="text-[10px] sm:text-[11px] md:text-[12px] font-bold">{cat.name}</span>
           </motion.button>
         ))}
       </motion.div>
@@ -303,7 +303,7 @@ const MenuScreen = () => {
         </motion.header>
 
         <motion.div
-          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
+          className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}

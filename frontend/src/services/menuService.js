@@ -276,7 +276,7 @@ export const fetchMenus = async ({
     }
 
     const url = `${BASE_URL}/api/menus${
-      queryParams.toString() ? `?${queryParams.toString()}` : ""
+      queryParams.toString() ? `?${queryParams.toString()}&available=true` : "?available=true"
     }`;
 
     const response = await fetch(url, {

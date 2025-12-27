@@ -209,6 +209,29 @@ class ModifierGroupsController {
   // ==================== MODIFIER OPTIONS ====================
 
   /**
+   * [GET] /api/modifier-options/:id
+   * Lấy chi tiết modifier option theo ID
+   */
+  getOptionById = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { id } = req.params;
+
+      const data = await this.modifierGroupsService.getOptionById(id, tenantId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Modifier option fetched successfully",
+        data,
+      });
+    } catch (error) {
+      if (error.message.includes("not found")) error.statusCode = 404;
+      else if (error.message.includes("Access denied")) error.statusCode = 403;
+      next(error);
+    }
+  };
+
+  /**
    * [POST] /api/modifier-groups/:id/options
    * Tạo option mới trong group
    */

@@ -204,6 +204,32 @@ class ModifierGroupsService {
   // ==================== MODIFIER OPTIONS ====================
 
   /**
+   * Lấy modifier option theo ID
+   * @param {string} optionId - ID của option
+   * @param {string} tenantId - ID của tenant
+   */
+  async getOptionById(optionId, tenantId) {
+    if (!optionId) throw new Error("Option ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    const option = await this.optionsRepo.getById(optionId);
+    if (!option) {
+      throw new Error("Modifier option not found");
+    }
+
+    // Kiểm tra quyền thông qua group
+    const group = await this.groupsRepo.getById(option.groupId);
+    if (!group) {
+      throw new Error("Associated modifier group not found");
+    }
+    if (group.tenantId !== tenantId) {
+      throw new Error("Access denied: Cannot access this modifier option");
+    }
+
+    return option.toResponse();
+  }
+
+  /**
    * Tạo option mới trong group
    */
   async createOption(groupId, optionData, tenantId) {

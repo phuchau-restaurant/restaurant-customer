@@ -41,12 +41,24 @@ class MenuItemModifierGroupController {
       let result;
       if (groupId) {
         result = await this.service.findLink(dishId, groupId);
+        res.status(200).json({ success: true, data: result });
       } else {
         result = await this.service.findByDishId(dishId);
+        res.status(200).json({ success: true, data: result });
       }
-      res
-        .status(200)
-        .json({ success: true, data: result.map((r) => r.toResponse()) });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  // [GET] /api/menu-item-modifier-group/full?dishId=...
+  getFullModifiersByDishId = async (req, res, next) => {
+    try {
+      const { dishId } = req.query;
+      if (!dishId) throw new Error("dishId là bắt buộc");
+      const result = await this.service.getFullModifiersByDishId(dishId);
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       error.statusCode = 400;
       next(error);

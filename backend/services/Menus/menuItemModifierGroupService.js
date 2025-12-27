@@ -25,6 +25,33 @@ class MenuItemModifierGroupService {
   async findByDishId(dishId) {
     return await this.repo.findByDishId(dishId);
   }
+
+  // Lấy modifiers đầy đủ cho dishId (format cho frontend)
+  async getModifiersByDishId(dishId) {
+    const rawData = await this.repo.findByDishId(dishId);
+    
+    // Transform dữ liệu từ Supabase join sang format dễ dùng
+    return rawData.map(item => {
+      const group = item.modifier_groups;
+      return {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        minSelections: group.min_selections,
+        maxSelection: group.max_selection,
+        isRequired: group.is_required,
+        isActive: group.is_active,
+        options: (group.modifier_options || []).map(opt => ({
+          id: opt.id,
+          name: opt.name,
+          price: opt.price,
+          isDefault: opt.is_default,
+          isActive: opt.is_active,
+          displayOrder: opt.display_order
+        }))
+      };
+    });
+  }
 }
 
 export default MenuItemModifierGroupService;

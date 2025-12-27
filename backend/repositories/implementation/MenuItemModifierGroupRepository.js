@@ -41,13 +41,35 @@ export class MenuItemModifierGroupRepository {
     return (data || []).map((row) => new MenuItemModifierGroup(row));
   }
 
-  // Tìm tất cả group liên quan đến dishId
+  // Tìm tất cả group liên quan đến dishId (kèm thông tin chi tiết)
   async findByDishId(dishId) {
     const { data, error } = await supabase
       .from(this.tableName)
-      .select()
-      .eq("dish_id", dishId);
+      .select(`
+        *,
+        modifier_groups!inner (
+          id,
+          name,
+          description,
+          min_selections,
+          max_selection,
+          is_required,
+          is_active,
+          modifier_options (
+            id,
+            name,
+            price,
+            is_default,
+            is_active,
+            display_order
+          )
+        )
+      `)
+      .eq("dish_id", dishId)
+      .eq("modifier_groups.is_active", true)
+      .order("modifier_groups(display_order)", { ascending: true });
+    
     if (error) throw new Error(error.message);
-    return (data || []).map((row) => new MenuItemModifierGroup(row));
+    return data || [];
   }
 }

@@ -7,12 +7,14 @@ import { ShoppingCart, Utensils, LogOut } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
+import ImageGalleryModal from "../components/Modal/ImageGalleryModal";
 import { useAlert } from "../hooks/useAlert";
-
-const defaultCustomer = {
-  name: "Khách hàng",
-  loyaltyPoints: 0,
-};
+import {
+  fetchCategories,
+  fetchMenus,
+  fetchAvatarUrls,
+  submitOrder,
+} from "../services/menuService";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -27,8 +29,10 @@ const MenuScreen = () => {
   const [categoryIdMap, setCategoryIdMap] = useState({});
   const [avatarUrl, setAvatarUrl] = useState([]);
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
+  const [galleryProduct, setGalleryProduct] = useState(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Fetch categories and menu
+  // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
     // Kiểm tra đã login và có thông tin bàn chưa
     if (!tableInfo || !tableInfo.id) {
@@ -37,155 +41,42 @@ const MenuScreen = () => {
       return;
     }
 
-    // Fetch categories
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/categories`,
-          {
-            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-          }
-        );
+    // Load initial data (categories + avatars only)
+    const loadInitialData = async () => {
+      // Fetch categories
+      const { categories: cats, categoryIdMap: idMap } = await fetchCategories();
+      setCategories(cats);
+      setCategoryIdMap(idMap);
 
-        const json = await res.json();
-
-        if (json.success) {
-          const mappedCategories = [
-            {
-              id: "0",
-              name: "All",
-              iconUrl: null,
-              categoryId: null,
-            },
-          ];
-
-          const idMap = {};
-
-          json.data
-            .filter((cat) => cat.isActive)
-            .sort((a, b) => a.displayOrder - b.displayOrder)
-            .forEach((cat) => {
-              const catId = cat.name.toLowerCase().replace(/\s+/g, "-");
-              mappedCategories.push({
-                id: catId,
-                name: cat.name,
-                iconUrl: cat.urlIcon,
-                categoryId: cat.id,
-              });
-              idMap[catId] = cat.id;
-            });
-
-          setCategories(mappedCategories);
-          setCategoryIdMap(idMap);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi fetch categories:", err);
-        setCategories([
-          { id: "all", name: "Tất cả", iconUrl: null, categoryId: null },
-        ]);
-      }
+      // Fetch avatar URLs
+      const avatars = await fetchAvatarUrls();
+      setAvatarUrl(avatars);
+      
+      // Đánh dấu đã load xong categories
+      setIsInitialLoad(false);
     };
 
-    const fetchUrlAvatar = async () => {
-      try {
-        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/appsettings`;
-        const url = new URL(baseUrl);
-
-        const res = await fetch(url.toString(), {
-          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-        });
-
-        const json = await res.json();
-        if (!json.success) throw new Error("Lấy app settings thất bại");
-
-        // Lọc và map thành mảng URL
-        const avatarSettings = json.data
-          .filter((setting) => setting.category === "avatar")
-          .map((setting) => setting.value);
-
-        setAvatarUrl(avatarSettings);
-      } catch (err) {
-        console.error("❌ Lỗi fetch avatar:", err);
-      }
-    };
-
-    // Fetch menu lần đầu tiên khi mount
-    const fetchInitialMenus = async () => {
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_URL}/api/menus`,
-          {
-            headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
-          }
-        );
-
-        const json = await res.json();
-        if (json.success) {
-          const mapped = json.data.map((item, index) => ({
-            id: item.id || index + 1,
-            name: item.name,
-            description: item.description || "Không có mô tả",
-            price: item.price,
-            category: "0", // Default category for initial load
-            imgUrl: item.imgUrl,
-            isAvailable: item.isAvailable,
-          }));
-          setProducts(mapped);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi fetch initial menus:", err);
-      }
-    };
-
-    fetchUrlAvatar();
-    fetchCategories();
-    fetchInitialMenus();
+    loadInitialData();
   }, []);
 
-  // Fetch menus based on active category
+  // Fetch menus based on active category (chỉ sau khi đã có categories)
   useEffect(() => {
-    // Bỏ qua lần render đầu tiên (activeCategory = "all")
-    if (activeCategory === "all") return;
-
-    const fetchMenus = async () => {
+    // Chờ cho đến khi categories đã load xong
+    if (isInitialLoad) return;
+    
+    const loadMenusByCategory = async () => {
       setIsLoadingMenu(true);
       try {
-        const baseUrl = `${import.meta.env.VITE_BACKEND_URL}/api/menus`;
-        const url = new URL(baseUrl);
-
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
-        if (activeCategory !== "0") {
-          const categoryId = categoryIdMap[activeCategory];
-          if (categoryId) {
-            url.searchParams.append("categoryId", categoryId);
-          }
-        }
-
-        const res = await fetch(url.toString(), {
-          headers: { "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866" },
+        const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
+        
+        const products = await fetchMenus({
+          categoryId,
+          categories,
+          activeCategory,
         });
-
-        const json = await res.json();
-
-        if (!json.success) throw new Error("Lấy menu thất bại");
-
-        // Tìm category name từ categoryId
-        const getCategoryNameById = (catId) => {
-          const found = categories.find((c) => c.categoryId === catId);
-          return found ? found.id : activeCategory;
-        };
-
-        const mapped = json.data.map((item, index) => ({
-          id: item.id || index + 1,
-          name: item.name,
-          description: item.description || "Không có mô tả",
-          price: item.price,
-          category: getCategoryNameById(item.categoryId),
-          imgUrl: item.imgUrl,
-          isAvailable: item.isAvailable,
-        }));
-
-        setProducts(mapped);
+        
+        setProducts(products);
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
       } finally {
@@ -195,48 +86,18 @@ const MenuScreen = () => {
 
     // Gọi API khi chọn "0" (Tất cả) hoặc khi có categoryId hợp lệ
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
-      fetchMenus();
+      loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad]);
 
-  // Submit order (giữ nguyên)
-  const submitOrder = async () => {
+  // Submit order handler
+  const handleSubmitOrder = async () => {
     try {
-      const payload = {
+      await submitOrder({
         tableId: tableInfo.id,
         customerId: 1,
-        dishes: cart.map((item) => ({
-          dishId: item.id,
-          quantity: item.qty,
-          description: item.name,
-          note: item.note?.trim() || null,
-        })),
-      };
-
-      const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/orders`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-tenant-id": "019abac9-846f-75d0-8dfd-bcf9c9457866",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const raw = await response.text();
-
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch (e) {
-        throw new Error("API trả về HTML thay vì JSON.");
-      }
-
-      if (!response.ok) {
-        throw new Error(result.message || "Gửi đơn hàng thất bại");
-      }
+        dishes: cart,
+      });
 
       showSuccess("Đặt món thành công!");
       setCart([]);
@@ -264,22 +125,45 @@ const MenuScreen = () => {
   // Cart actions
   const addToCart = (product) => {
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      // Tạo unique key từ product id + modifiers để phân biệt cùng món nhưng khác modifiers
+      const modifiersKey = product.selectedModifiers
+        ?.map((m) => m.optionId)
+        .sort()
+        .join("-") || "";
+      const cartItemKey = `${product.id}-${modifiersKey}`;
+      
+      const existing = prev.find((item) => item.cartItemKey === cartItemKey);
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+          item.cartItemKey === cartItemKey ? { ...item, qty: item.qty + 1 } : item
         );
       }
-      return [...prev, { ...product, qty: 1, note: "" }];
+      return [
+        ...prev,
+        {
+          ...product,
+          cartItemKey,
+          qty: 1,
+          note: "",
+        },
+      ];
     });
   };
 
-  const removeFromCart = (productId) => {
+  const removeFromCart = (productId, cartItemKey = null) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === productId ? { ...item, qty: item.qty - 1 } : item
-        )
+        .map((item) => {
+          // Nếu có cartItemKey, dùng nó để xác định item
+          if (cartItemKey && item.cartItemKey === cartItemKey) {
+            return { ...item, qty: item.qty - 1 };
+          }
+          // Fallback: dùng productId
+          if (!cartItemKey && item.id === productId) {
+            return { ...item, qty: item.qty - 1 };
+          }
+          return item;
+        })
         .filter((item) => item.qty > 0)
     );
   };
@@ -294,22 +178,26 @@ const MenuScreen = () => {
     }
   };
 
-  const updateItemNote = (itemId, note) => {
+  const updateItemNote = (itemId, note, cartItemKey = null) => {
     setCart((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, note } : item))
+      prev.map((item) => {
+        if (cartItemKey && item.cartItemKey === cartItemKey) {
+          return { ...item, note };
+        }
+        if (!cartItemKey && item.id === itemId) {
+          return { ...item, note };
+        }
+        return item;
+      })
     );
   };
 
   const totalAmount = cart.reduce(
-    (sum, item) => sum + item.price * item.qty,
+    (sum, item) => sum + (item.totalPrice || item.price) * item.qty,
     0
   );
   const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
 
-  const getItemQuantity = (productId) => {
-    const item = cart.find((i) => i.id === productId);
-    return item ? item.qty : 0;
-  };
   return (
     <motion.div
       className="flex h-screen bg-linear-to-br from-amber-50 via-orange-50 to-red-50 font-sans overflow-hidden relative select-none"
@@ -415,7 +303,7 @@ const MenuScreen = () => {
         </motion.header>
 
         <motion.div
-          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-fr pb-6"
+          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
@@ -442,10 +330,8 @@ const MenuScreen = () => {
               >
                 <MenuItem
                   product={product}
-                  quantity={getItemQuantity(product.id)}
-                  onAdd={() => addToCart(product)}
-                  onRemove={() => removeFromCart(product.id)}
-                  onQuantityChange={setQuantity}
+                  onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
+                  onImageClick={(product) => setGalleryProduct(product)}
                 />
               </motion.div>
             ))
@@ -505,10 +391,10 @@ const MenuScreen = () => {
           ) : (
             cart.map((item) => (
               <CartItem
-                key={item.id}
+                key={item.cartItemKey || item.id}
                 item={item}
                 onAdd={() => addToCart(item)}
-                onRemove={() => removeFromCart(item.id)}
+                onRemove={() => removeFromCart(item.id, item.cartItemKey)}
                 onQuantityChange={setQuantity}
                 onNoteChange={updateItemNote}
               />
@@ -530,7 +416,7 @@ const MenuScreen = () => {
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             }`}
             disabled={cart.length === 0}
-            onClick={submitOrder}
+            onClick={handleSubmitOrder}
           >
             Đặt món ngay
           </button>
@@ -545,6 +431,17 @@ const MenuScreen = () => {
         message={alert.message}
         type={alert.type}
       />
+
+      {/* Image Gallery Modal - Full Screen */}
+      {galleryProduct && (
+        <ImageGalleryModal
+          key={galleryProduct.id}
+          isOpen={!!galleryProduct}
+          onClose={() => setGalleryProduct(null)}
+          images={galleryProduct.photos || []}
+          initialIndex={0}
+        />
+      )}
     </motion.div>
   );
 };

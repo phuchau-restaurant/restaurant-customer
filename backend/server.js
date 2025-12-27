@@ -1,4 +1,4 @@
-//Nơi khởi động Express App
+//Nơi khởi động Express App - Customer App
 
 import express from "express";
 import cors from "cors";
@@ -7,17 +7,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Import các routes
-
 import { connectDatabase } from "./configs/database.js";
 import categoriesRoutes from "./routers/categories.routes.js";
-import usersRoutes from "./routers/users.routes.js";
-import authRoutes from "./routers/auth.routes.js";
-import menusRoutes from './routers/menus.routes.js';
-import customersRoutes from './routers/customers.routes.js';
-import ordersRoutes from './routers/orders.routes.js';
-import kitchenRoutes from './routers/kitchen.routes.js';
-import appSettingsRoutes from './routers/appSettings.routes.js';
-import adminRoutes from './routers/admin.routes.js';
+import menusRoutes from "./routers/menus.routes.js";
+import customersRoutes from "./routers/customers.routes.js";
+import ordersRoutes from "./routers/orders.routes.js";
+import appSettingsRoutes from "./routers/appSettings.routes.js";
+import modifiersRoutes from "./routers/modifiers.routes.js";
+import menuItemModifierGroupRoutes from "./routers/menuItemModifierGroup.routes.js";
+import menuItemPhotoRoutes from "./routers/menuItemPhoto.routes.js";
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -38,24 +36,18 @@ app.use(express.json()); // QUAN TRỌNG: Để server đọc được JSON từ
 app.use(requestLogger);
 
 // --- ROUTES ---
-// Gắn route categories vào đường dẫn gốc /api/categories
+// API dành cho khách hàng
 app.use("/api/categories", categoriesRoutes);
-app.use("/api/users", usersRoutes);
-app.use("/api/auth", authRoutes);
-app.use('/api/menus', menusRoutes); 
-app.use('/api/customers', customersRoutes);
-app.use('/api/orders', ordersRoutes);
-app.use('/api/appsettings', appSettingsRoutes); 
-app.use('/api/admin', adminRoutes); 
-
-//route nghiệp vụ cho kitchen
-app.use('/api/kitchen', kitchenRoutes);
-//Nghiệp vụ cho admin
-app.use('/api/admin', adminRoutes);
-
+app.use("/api/menus", menusRoutes);
+app.use("/api/customers", customersRoutes);
+app.use("/api/orders", ordersRoutes);
+app.use("/api/appsettings", appSettingsRoutes);
+app.use("/api", modifiersRoutes);
+app.use("/api/menu-item-modifier-group", menuItemModifierGroupRoutes);
+app.use("/api/items", menuItemPhotoRoutes);
 // Route kiểm tra server sống hay chết
 app.get("/", (req, res) => {
-  res.send("🚀 Server is running...");
+  res.send("🍽️ Customer App - Server is running...");
 });
 
 // --- ERROR HANDLING  ---

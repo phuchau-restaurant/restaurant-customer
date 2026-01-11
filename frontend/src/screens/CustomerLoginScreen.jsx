@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
 import { motion } from "framer-motion";
 import {
@@ -13,6 +13,10 @@ import {
   UtensilsCrossed,
   ChefHat,
   Pizza,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import AlertModal from "../components/Modal/AlertModal";
 import { useAlert } from "../hooks/useAlert";
@@ -22,8 +26,9 @@ const CustomerLoginScreen = () => {
   const { login, updateTable } = useCustomer();
   const { alert, showError, showWarning, closeAlert } = useAlert();
 
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+  const [identifier, setIdentifier] = useState(""); // Email or Phone
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [tableInfo, setTableInfo] = useState(null);
@@ -70,7 +75,13 @@ const CustomerLoginScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isValidPhone = (value) => {
+  const validateIdentifier = (value) => {
+    // Check if it's an email
+    if (value.includes("@")) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(value);
+    }
+    // Check if it's a phone number
     const phoneRegex = /^0\d{9,10}$/;
     return phoneRegex.test(value);
   };
@@ -78,13 +89,13 @@ const CustomerLoginScreen = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    if (!isValidPhone(phone)) {
-      setError("Số điện thoại phải bắt đầu bằng 0 và dài 10 - 11 chữ số.");
+    if (!validateIdentifier(identifier)) {
+      setError("Vui lòng nhập email hợp lệ hoặc số điện thoại (bắt đầu bằng 0, dài 10-11 số)");
       return;
     }
 
-    if (!name.trim()) {
-      setError("Vui lòng nhập tên.");
+    if (!password.trim()) {
+      setError("Vui lòng nhập mật khẩu.");
       return;
     }
 
@@ -102,8 +113,8 @@ const CustomerLoginScreen = () => {
             "x-tenant-id": tenantId || import.meta.env.VITE_TENANT_ID,
           },
           body: JSON.stringify({
-            phoneNumber: phone,
-            fullName: name,
+            identifier: identifier,
+            password: password,
           }),
         }
       );
@@ -414,7 +425,7 @@ const CustomerLoginScreen = () => {
             </motion.div>
 
             <form className="space-y-6" onSubmit={handleLogin}>
-              {/* Phone Input */}
+              {/* Email or Phone Input */}
               <motion.div
                 className="space-y-2 group"
                 initial={{ opacity: 0, x: -20 }}
@@ -422,21 +433,21 @@ const CustomerLoginScreen = () => {
                 transition={{ delay: 0.2 }}
               >
                 <label className="block text-md font-semibold text-gray-700 flex items-center gap-2 pl-1">
-                  <Phone className="w-4 h-4 text-orange-500" />
-                  Số điện thoại
+                  <Mail className="w-4 h-4 text-orange-500" />
+                  Email hoặc Số điện thoại
                 </label>
                 <div className="relative overflow-hidden rounded-xl">
                   <input
-                    type="tel"
+                    type="text"
                     className="w-full border-2 border-gray-100 bg-gray-50 px-5 py-4 text-lg focus:bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-300 outline-none placeholder:text-gray-300"
-                    placeholder="0123 456 789"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="email@example.com hoặc 0123456789"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                   />
                 </div>
               </motion.div>
 
-              {/* Name Input */}
+              {/* Password Input */}
               <motion.div
                 className="space-y-2 group"
                 initial={{ opacity: 0, x: 20 }}
@@ -444,17 +455,24 @@ const CustomerLoginScreen = () => {
                 transition={{ delay: 0.3 }}
               >
                 <label className="block text-md font-semibold text-gray-700 flex items-center gap-2 pl-1">
-                  <User className="w-4 h-4 text-orange-500" />
-                  Tên của bạn
+                  <Lock className="w-4 h-4 text-orange-500" />
+                  Mật khẩu
                 </label>
                 <div className="relative overflow-hidden rounded-xl">
                   <input
-                    type="text"
-                    className="w-full border-2 border-gray-100 bg-gray-50 px-5 py-4 text-lg focus:bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-300 outline-none placeholder:text-gray-300"
-                    placeholder="Ví dụ: Anh Nam"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    className="w-full border-2 border-gray-100 bg-gray-50 px-5 py-4 pr-12 text-lg focus:bg-white focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-300 outline-none placeholder:text-gray-300"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                 </div>
               </motion.div>
 
@@ -500,9 +518,27 @@ const CustomerLoginScreen = () => {
               </motion.button>
             </form>
 
+            {/* Register Link */}
+            <motion.div
+              className="text-center pt-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <p className="text-sm text-gray-600">
+                Bạn chưa có tài khoản?{" "}
+                <Link
+                  to={`/register${window.location.search}`}
+                  className="text-orange-500 font-semibold hover:underline"
+                >
+                  Đăng ký ngay
+                </Link>
+              </p>
+            </motion.div>
+
             {/* Footer */}
             <motion.div
-              className="text-center pt-6 border-t border-gray-100"
+              className="text-center pt-4 border-t border-gray-100"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.6 }}

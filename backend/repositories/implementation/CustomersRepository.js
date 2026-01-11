@@ -76,6 +76,18 @@ async update(id, updates) {
     return data.map(item => new Customers(item)) || [];
   }
 
+  async findByEmail(tenantId, email) {
+    if (!tenantId) throw new Error("TenantID is required for search");
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq('tenant_id', tenantId)
+      .eq('email', email);
+
+    if (error) throw new Error(`FindByEmail failed: ${error.message}`);
+    return data.map(item => new Customers(item)) || [];
+  }
+
 async getById(id) {
     const rawData = await super.getById(id); 
     return rawData ? new Customers(rawData) : null; 

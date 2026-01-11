@@ -11,6 +11,7 @@ import { AnimatePresence } from "framer-motion";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import MenuScreen from "./screens/MenuScreen";
 import CustomerLoginScreen from "./screens/CustomerLoginScreen";
+import CustomerRegisterScreen from "./screens/CustomerRegisterScreen";
 
 function AppRoutes() {
   const location = useLocation();
@@ -20,6 +21,7 @@ function AppRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<CustomerLoginScreen />} />
+        <Route path="/register" element={<CustomerRegisterScreen />} />
         <Route path="/menu" element={<MenuScreen />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

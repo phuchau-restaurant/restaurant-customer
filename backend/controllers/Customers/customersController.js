@@ -90,38 +90,94 @@ class CustomersController {
   // for [POST] /api/customers/login
   customerLogin = async (req, res, next) => {
     const tenantId = req.tenantId;
-    const { phoneNumber, fullName } = req.body; //must be body, not query or params
+    const { identifier, password } = req.body; // identifier can be email or phone
+    
     try {
-      const data = await this.customersService.findCustomerByPhoneNumber(
-        tenantId,
-        phoneNumber
-      );
-      if (data.fullName !== fullName) {
-        throw new Error("Customer name does not match");
+      // Validate input
+      if (!identifier || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Email/Phone and password are required"
+        });
       }
-      const { id: _id, tenantId: _tid, ...returnData } = data;
+
+      // Try to find customer by email or phone
+      const customer = await this.customersService.authenticateCustomer(
+        tenantId,
+        identifier,
+        password
+      );
+
+      if (!customer) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials"
+        });
+      }
+
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
       return res.status(200).json({
-        message: "Customer fetched successfully",
+        message: "Login successful",
         success: true,
-        total: returnData.length,
         data: returnData,
       });
     } catch (error) {
-      //if not found ->Creat new customer
-      if (error.message.includes("not found")) {
-        const anotherData = await this.customersService.createCustomer({
-          tenantId,
-          phoneNumber,
-          fullName,
+      if (error.message.includes("Invalid credentials") || error.message.includes("not found")) {
+        return res.status(401).json({
+          success: false,
+          message: "Số điện thoại/Email hoặc mật khẩu không đúng"
         });
-        const { id: _id, tenantId: _tid, ...returnData } = anotherData;
-        return res.status(201).json({
-          message: "New customer created successfully",
-          success: true,
-          data: returnData,
+      }
+      error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  // [POST] /api/customers/register
+  customerRegister = async (req, res, next) => {
+    const tenantId = req.tenantId;
+    const { phoneNumber, fullName, email, password } = req.body;
+    
+    try {
+      // Validate required fields
+      if (!phoneNumber || !fullName || !email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "All fields are required (phoneNumber, fullName, email, password)"
         });
-      } else if (error.message.includes("Access denied"))
-        error.statusCode = 403;
+      }
+
+      //Check if phoneNumber already exists
+      const existingCustomer = await this.customersService.findCustomerByEmailOrPhone(
+        tenantId,
+        email,
+        phoneNumber
+      );
+
+      if (existingCustomer) {
+        return res.status(409).json({
+          success: false,
+          message: "Phone number or email already registered"
+        });
+      }
+
+      // Create new customer
+      const newCustomer = await this.customersService.createCustomerWithAuth({
+        tenantId,
+        phoneNumber,
+        fullName,
+        email,
+        password
+      });
+
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = newCustomer;
+      return res.status(201).json({
+        success: true,
+        message: "Customer registered successfully",
+        data: returnData
+      });
+    } catch (error) {
+      error.statusCode = 400;
       next(error);
     }
   };

@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
 import { motion } from "framer-motion";
-import { ShoppingCart, Utensils, LogOut } from "lucide-react";
+import { ShoppingCart, Utensils, LogOut, Search, Filter, ArrowUpDown, X, ChevronDown } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
@@ -31,6 +31,11 @@ const MenuScreen = () => {
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
   const [galleryProduct, setGalleryProduct] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Search, Filter, Sort States
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("default");
+  const [priceFilter, setPriceFilter] = useState("all");
 
   // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
@@ -89,6 +94,44 @@ const MenuScreen = () => {
       loadMenusByCategory();
     }
   }, [activeCategory, categoryIdMap, categories, isInitialLoad]);
+
+  // Filter and Sort Logic
+  const filteredAndSortedProducts = useMemo(() => {
+    let result = [...products];
+
+    // 1. Search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          (p.description && p.description.toLowerCase().includes(query))
+      );
+    }
+
+    // 2. Filter by Price
+    if (priceFilter !== "all") {
+      result = result.filter((p) => {
+        if (priceFilter === "under-50") return p.price < 50000;
+        if (priceFilter === "50-100") return p.price >= 50000 && p.price <= 100000;
+        if (priceFilter === "above-100") return p.price > 100000;
+        return true;
+      });
+    }
+
+    // 3. Sort
+    if (sortBy !== "default") {
+      result.sort((a, b) => {
+        if (sortBy === "price-asc") return a.price - b.price;
+        if (sortBy === "price-desc") return b.price - a.price;
+        if (sortBy === "name-asc") return a.name.localeCompare(b.name);
+        if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+        return 0;
+      });
+    }
+
+    return result;
+  }, [products, searchQuery, sortBy, priceFilter]);
 
   // Submit order handler
   const handleSubmitOrder = async () => {
@@ -302,6 +345,69 @@ const MenuScreen = () => {
           </div>
         </motion.header>
 
+        {/* Search, Filter, Sort Toolbar */}
+        <motion.div
+          className="px-6 py-2 shrink-0 z-20"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <div className="bg-white p-3 rounded-xl shadow-sm border border-orange-100 flex flex-col md:flex-row gap-3 items-stretch">
+            {/* Search Bar - 50% width */}
+            <div className="relative w-full md:flex-1 flex items-center">
+              <Search className="absolute left-3 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Tìm món ăn..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Price Filter - 25% width */}
+            <div className="relative w-full md:w-60">
+              <select
+                value={priceFilter}
+                onChange={(e) => setPriceFilter(e.target.value)}
+                className="appearance-none w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200 cursor-pointer"
+              >
+                <option value="all">Tất cả giá</option>
+                <option value="under-50">Dưới 50k</option>
+                <option value="50-100">50k - 100k</option>
+                <option value="above-100">Trên 100k</option>
+              </select>
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+            </div>
+
+            {/* Sort By - 25% width */}
+            <div className="relative w-full md:w-60">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="appearance-none w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200 cursor-pointer"
+              >
+                <option value="default">Mặc định</option>
+                <option value="price-asc">Giá tăng dần</option>
+                <option value="price-desc">Giá giảm dần</option>
+                <option value="name-asc">Tên (A-Z)</option>
+                <option value="name-desc">Tên (Z-A)</option>
+              </select>
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div
           className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
@@ -320,13 +426,32 @@ const MenuScreen = () => {
                 Đang tải món ăn...
               </p>
             </div>
+          ) : filteredAndSortedProducts.length === 0 ? (
+            <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
+               <div className="bg-gray-100 p-4 rounded-full mb-3">
+                 <Search size={32} className="text-gray-400" />
+               </div>
+               <p className="font-medium">Không tìm thấy món nào</p>
+               <button 
+                 onClick={() => {
+                   setSearchQuery("");
+                   setPriceFilter("all");
+                   setSortBy("default");
+                 }}
+                 className="mt-2 text-sm text-orange-500 hover:underline"
+               >
+                 Xóa bộ lọc
+               </button>
+            </div>
           ) : (
-            products.map((product, index) => (
+            filteredAndSortedProducts.map((product, index) => (
               <motion.div
                 key={product.id}
+                layout
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3, delay: 0.6 + index * 0.03 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.3 }}
               >
                 <MenuItem
                   product={product}

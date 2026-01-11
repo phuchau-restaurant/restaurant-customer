@@ -18,7 +18,7 @@ export class CustomerRepository extends BaseRepository {
 
   async create(data) {
     const customerEntity = new Customers(data);
-    const dbPayload = customerEntity.toPersistence(); 
+    const dbPayload = customerEntity.toPersistence();
 
     const { data: result, error } = await supabase
       .from(this.tableName)
@@ -30,19 +30,22 @@ export class CustomerRepository extends BaseRepository {
     return result?.[0] ? new Customers(result[0]) : null;
   }
 
-async update(id, updates) {
-    //"Clean Payload"  
-    const customerEntity = new Customers(updates);
-    const dbPayload = customerEntity.toPersistence();
-    // lọc sạch object dbPayload.
-    Object.keys(dbPayload).forEach(key => {
-        if (dbPayload[key] === undefined) {
-            delete dbPayload[key];
-        }
-    });
+  async update(id, updates) {
+    // Don't use entity for update - directly update only provided fields
+    // This prevents overwriting other fields with null
+    const cleanUpdates = {};
+    
+    // Only include fields that are actually provided
+    if (updates.phoneNumber !== undefined) cleanUpdates.phone_number = updates.phoneNumber;
+    if (updates.fullName !== undefined) cleanUpdates.full_name = updates.fullName;
+    if (updates.email !== undefined) cleanUpdates.email = updates.email;
+    if (updates.password !== undefined) cleanUpdates.password = updates.password;
+    if (updates.isActive !== undefined) cleanUpdates.is_active = updates.isActive;
+    if (updates.loyaltyPoints !== undefined) cleanUpdates.loyalty_points = updates.loyaltyPoints;
+    
     const { data, error } = await supabase
       .from(this.tableName)
-      .update(dbPayload) 
+      .update(cleanUpdates) 
       .eq(this.primaryKey, id)
       .select();
 

@@ -118,11 +118,13 @@ const CustomerRegisterScreen = () => {
         return;
       }
 
-      showSuccess("Đăng ký thành công! Chuyển đến trang đăng nhập...");
+      showSuccess("Đăng ký thành công! Vui lòng kiểm tra email để nhận mã OTP.");
       setTimeout(() => {
         const params = new URLSearchParams(window.location.search);
         const token = params.get("token");
-        navigate(`/login${token ? `?token=${token}` : ""}`);
+        navigate(`/verify-otp${token ? `?token=${token}` : ""}`, {
+          state: { email: formData.email }
+        });
       }, 2000);
     } catch (error) {
       console.error("Register error:", error);

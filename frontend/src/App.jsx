@@ -12,6 +12,7 @@ import { CustomerProvider } from "./contexts/CustomerContext";
 import MenuScreen from "./screens/MenuScreen";
 import CustomerLoginScreen from "./screens/CustomerLoginScreen";
 import CustomerRegisterScreen from "./screens/CustomerRegisterScreen";
+import CustomerVerifyOTPScreen from "./screens/CustomerVerifyOTPScreen";
 
 function AppRoutes() {
   const location = useLocation();
@@ -22,6 +23,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<CustomerLoginScreen />} />
         <Route path="/register" element={<CustomerRegisterScreen />} />
+        <Route path="/verify-otp" element={<CustomerVerifyOTPScreen />} />
         <Route path="/menu" element={<MenuScreen />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

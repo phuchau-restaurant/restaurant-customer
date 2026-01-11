@@ -1,4 +1,5 @@
 //backend/controllers/Customers/customersControllers.js
+import { verifyOTP } from "../../helpers/otpHelper.js";
 
 ///<summary>
 /// Controller quản lý các endpoint liên quan đến Customers
@@ -122,6 +123,16 @@ class CustomersController {
         data: returnData,
       });
     } catch (error) {
+      // Handle account not verified
+      if (error.code === "ACCOUNT_NOT_VERIFIED") {
+        return res.status(403).json({
+          success: false,
+          message: "Tài khoản chưa được xác thực. Vui lòng kiểm tra email và nhập mã OTP.",
+          code: "ACCOUNT_NOT_VERIFIED",
+          email: error.email
+        });
+      }
+      
       if (error.message.includes("Invalid credentials") || error.message.includes("not found")) {
         return res.status(401).json({
           success: false,
@@ -174,6 +185,49 @@ class CustomersController {
       return res.status(201).json({
         success: true,
         message: "Customer registered successfully",
+        data: returnData
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  // [POST] /api/customers/verify-otp
+  verifyOTP = async (req, res, next) => {
+    const tenantId = req.tenantId;
+    const { email, otp } = req.body;
+
+    try {
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and OTP are required"
+        });
+      }
+
+      // Verify OTP using helper function  
+      const otpHelper = await import("../../helpers/otpHelper.js");
+      const result = otpHelper.verifyOTP(email, otp);
+      
+      if (!result.valid) {
+        return res.status(400).json({
+          success: false,
+          message: result.reason === "OTP expired" 
+            ? "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới."
+            : result.reason === "Too many failed attempts"
+            ? "Quá nhiều lần thử. Vui lòng yêu cầu mã mới."
+            : "Mã OTP không đúng. Vui lòng thử lại."
+        });
+      }
+
+      // Activate customer account
+      const customer = await this.customersService.activateCustomer(email, tenantId);
+
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+      return res.status(200).json({
+        success: true,
+        message: "Xác thực thành công! Tài khoản đã được kích hoạt.",
         data: returnData
       });
     } catch (error) {

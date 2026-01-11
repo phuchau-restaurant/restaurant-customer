@@ -15,6 +15,7 @@ router.get("/", customersController.getAll);
 router.get("/:id", customersController.getById);
 router.post("/login", customersController.customerLogin);
 router.post("/register", customersController.customerRegister);
+router.post("/verify-otp", customersController.verifyOTP);
 router.post("/", customersController.create);
 router.put("/:id", customersController.update);
 router.delete("/:id", customersController.delete);

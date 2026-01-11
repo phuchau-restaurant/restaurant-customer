@@ -122,7 +122,12 @@ const CustomerLoginScreen = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        showError(data.message || "Đăng nhập thất bại");
+        // Check if account is not verified
+        if (data.code === "ACCOUNT_NOT_VERIFIED") {
+          setError(data.message + " Bạn có thể đăng ký lại để nhận mã OTP mới.");
+        } else {
+          showError(data.message || "Đăng nhập thất bại");
+        }
         setIsLoading(false);
         return;
       }

@@ -2,6 +2,8 @@
 import { isValidPhoneNumber } from "../../helpers/validationHelper.js"; 
 import{ isValidFullName } from "../../helpers/validationHelper.js";
 import bcrypt from "bcryptjs";
+import emailService from "../emailService.js";
+import { generateOTP, saveOTP } from "../../helpers/otpHelper.js";
 
 class CustomersService {
   constructor(customerRepository) {
@@ -130,6 +132,14 @@ class CustomersService {
       throw new Error("This account was not registered with a password. Please use QR code login.");
     }
 
+    // Check if account is active
+    if (!customer.isActive) {
+      const error = new Error("Account not verified");
+      error.code = "ACCOUNT_NOT_VERIFIED";
+      error.email = customer.email;
+      throw error;
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, customer.password);
     if (!isPasswordValid) {
@@ -234,10 +244,46 @@ class CustomersService {
       phoneNumber: phoneNumber.trim(),
       email: email.trim(),
       password: hashedPassword,
+      isActive: false, // Set to false, require email verification
       loyaltyPoints: loyaltyPoints
     };
     
-    return await this.customerRepo.create(newCustomerData);
+    const customer = await this.customerRepo.create(newCustomerData);
+
+    // Generate and send OTP
+    try {
+      const otp = generateOTP();
+      saveOTP(email.trim(), otp);
+      await emailService.sendOTPEmail(email.trim(), otp, fullName.trim());
+      console.log(`✅ OTP sent to ${email.trim()}: ${otp}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send OTP email:', emailError);
+      // Don't fail registration if email fails, but log it
+    }
+    
+    return customer;
+  }
+
+  /**
+   * Activate customer account after OTP verification
+   */
+  async activateCustomer(email, tenantId) {
+    if (!email) throw new Error("Email is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    const customers = await this.customerRepo.findByEmail(tenantId, email.trim());
+    if (!customers || customers.length === 0) {
+      throw new Error("Customer not found");
+    }
+
+    const customer = customers[0];
+    if (customer.isActive) {
+      throw new Error("Account is already active");
+    }
+
+    // Update isActive to true
+    const updated = await this.customerRepo.update(customer.id, { isActive: true });
+    return updated;
   }
 }
 

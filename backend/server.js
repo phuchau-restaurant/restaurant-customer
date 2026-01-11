@@ -24,7 +24,7 @@ import { requestLogger } from "./middlewares/loggerMiddleware.js";
 // Cấu hình môi trường
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config({ path: path.resolve(__dirname, ".env") }); // Load from backend/.env
 
 const app = express();
 const PORT = process.env.PORT || 3000;

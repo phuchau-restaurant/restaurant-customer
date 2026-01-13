@@ -179,9 +179,17 @@ const MenuScreen = () => {
   // Submit order handler
   const handleSubmitOrder = async () => {
     try {
+      // Get customerId from customer context
+      const customerId = customer?.customerId || customer?.id;
+      
+      if (!customerId) {
+        showError("Vui lòng đăng nhập để đặt món!");
+        return;
+      }
+
       await submitOrder({
         tableId: tableInfo.id,
-        customerId: 1,
+        customerId: customerId,
         dishes: cart,
       });
 

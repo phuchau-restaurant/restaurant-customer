@@ -12,7 +12,7 @@ class OrdersService {
     this.tablesRepo = tablesRepo;
   }
 
-  async createOrder({ tenantId, tableId, dishes }) {
+  async createOrder({ tenantId, tableId, customerId, dishes }) {
     if (!tenantId) throw new Error("Tenant ID is required");
     if (!tableId) throw new Error("Table ID is required");
     if (!dishes || !Array.isArray(dishes) || dishes.length === 0) {
@@ -82,6 +82,7 @@ class OrdersService {
     const newOrder = await this.ordersRepo.create({
       tenantId,
       tableId,
+      customerId, // Thêm customerId vào order
       status: OrdersStatus.UNSUBMIT, // Mặc định khi tạo là 'Unsubmit'
       totalAmount: calculatedTotalAmount,
       prepTimeOrder: totalPrepTime, // Tổng thời gian chuẩn bị đơn hàng

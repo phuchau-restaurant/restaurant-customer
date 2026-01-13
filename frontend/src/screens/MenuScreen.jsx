@@ -16,6 +16,7 @@ import {
   submitOrder,
 } from "../services/menuService";
 import Pagination from "../components/Pagination/Pagination";
+import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 import ProfileSidebar from "../components/Profile/ProfileSidebar";
 
@@ -569,28 +570,11 @@ const MenuScreen = () => {
       </div>
 
       {!isCartOpen && totalItems > 0 && (
-        <motion.button
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          transition={{ duration: 0.3 }}
+        <FloatingCartButton
+          totalItems={totalItems}
+          totalAmount={totalAmount}
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-linear-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-2xl shadow-orange-400/50 hover:shadow-orange-500/60 hover:scale-105 transition-all duration-300 z-40 flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4"
-        >
-          <div className="relative">
-            <ShoppingCart size={24} className="md:hidden" />
-            <ShoppingCart size={28} className="hidden md:block" />
-            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              {totalItems}
-            </span>
-          </div>
-          <div className="flex flex-col items-start">
-            <span className="text-[10px] md:text-xs opacity-90">Tổng cộng</span>
-            <span className="font-bold text-base md:text-lg">
-              {totalAmount.toLocaleString("vi-VN")}₫
-            </span>
-          </div>
-        </motion.button>
+        />
       )}
 
       <div

@@ -454,6 +454,71 @@ class CustomersController {
        next(error);
     }
   };
+
+  /**
+   * [POST] /api/customers/forgot-password
+   */
+  requestPasswordReset = async (req, res, next) => {
+    const tenantId = req.tenantId;
+    const { email } = req.body;
+
+    try {
+      if (!email) {
+        return res.status(400).json({ message: "Vui lòng nhập email" });
+      }
+
+      await this.customersService.requestPasswordResetOTP(tenantId, email);
+
+      return res.status(200).json({
+        success: true,
+        message: "Mã OTP đã được gửi đến email của bạn.",
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  /**
+   * [POST] /api/customers/reset-password
+   */
+  resetPassword = async (req, res, next) => {
+    const tenantId = req.tenantId;
+    const { email, otp, newPassword } = req.body;
+
+    try {
+      if (!email || !otp || !newPassword) {
+        return res.status(400).json({ message: "Thiếu thông tin xác thực" });
+      }
+
+      await this.customersService.resetPasswordWithOTP(tenantId, email, otp, newPassword);
+
+      return res.status(200).json({
+        success: true,
+        message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.",
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  /**
+   * [POST] /api/customers/verify-reset-otp
+   */
+  verifyResetOTP = async (req, res, next) => {
+    const { email, otp } = req.body;
+    try {
+      await this.customersService.verifyOTPOnly(email, otp);
+      return res.status(200).json({
+        success: true, 
+        message: "OTP Valid" 
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  }
 }
 
 export default CustomersController;

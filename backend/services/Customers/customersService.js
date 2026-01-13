@@ -3,7 +3,7 @@ import { isValidPhoneNumber } from "../../helpers/validationHelper.js";
 import{ isValidFullName } from "../../helpers/validationHelper.js";
 import bcrypt from "bcryptjs";
 import emailService from "../emailService.js";
-import { generateOTP, saveOTP } from "../../helpers/otpHelper.js";
+import { generateOTP, saveOTP, verifyOTP } from "../../helpers/otpHelper.js";
 import { OAuth2Client } from "google-auth-library";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Will need GOOGLE_CLIENT_ID in .env
@@ -406,6 +406,87 @@ class CustomersService {
     // In future, you might want to add validation for URL format
     // For now, just update the avatar field
     return await this.customerRepo.update(customerId, { avatar: avatarUrl });
+  }
+
+  /**
+   * Request OTP for password reset
+   * @param {string} tenantId
+   * @param {string} email
+   */
+  async requestPasswordResetOTP(tenantId, email) {
+    if (!tenantId) throw new Error("Tenant ID is required");
+    if (!email) throw new Error("Email is required");
+
+    const customers = await this.customerRepo.findByEmail(tenantId, email.trim());
+    if (!customers || customers.length === 0) {
+      throw new Error("Email không tồn tại trong hệ thống");
+    }
+
+    const otp = generateOTP();
+    // Save OTP with generic purpose or just relying on email key. 
+    // otpHelper usually saves simple Key -> Value.
+    await saveOTP(email.trim(), otp);
+
+    const customer = customers[0]; // We already found customer above
+
+    try {
+      await emailService.sendPasswordResetEmail(email.trim(), otp, customer.full_name || customer.fullName || "Quý khách");
+    } catch (error) {
+       console.error("Send OTP Error:", error);
+       throw new Error("Không thể gửi email OTP. Vui lòng thử lại sau.");
+    }
+    
+    return true;
+  }
+
+  /**
+   * Reset password using Verified OTP
+   * @param {string} tenantId
+   * @param {string} email
+   * @param {string} otp
+   * @param {string} newPassword
+   */
+  async resetPasswordWithOTP(tenantId, email, otp, newPassword) {
+    if (!email || !otp || !newPassword) throw new Error("Thiếu thông tin");
+
+    // 1. Verify OTP
+    const verification = await verifyOTP(email.trim(), otp);
+    if (!verification || !verification.valid) {
+      throw new Error(verification?.reason || "Mã OTP không chính xác hoặc đã hết hạn");
+    }
+
+    // 2. Find Customer
+    const customers = await this.customerRepo.findByEmail(tenantId, email.trim());
+    if (!customers || customers.length === 0) {
+      throw new Error("Email không tồn tại");
+    }
+    const customer = customers[0];
+
+    // 3. Hash new password
+    if (newPassword.length < 6) {
+      throw new Error("Mật khẩu phải có ít nhất 6 ký tự");
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 4. Update password
+    return await this.customerRepo.update(customer.id, { 
+      password: hashedPassword,
+      // Optional: Mark as active/verified if not already? (Usually reset pass implies verification)
+      isActive: true 
+    });
+  }
+
+  /**
+   * Verify OTP only (for Password Reset flow)
+   */
+  async verifyOTPOnly(email, otp) {
+    if (!email || !otp) throw new Error("Missing email or OTP");
+    // Pass true to keep OTP for the next step (reset password)
+    const verification = await verifyOTP(email.trim(), otp, true);
+    if (!verification || !verification.valid) {
+      throw new Error(verification?.reason || "Mã OTP không chính xác");
+    }
+    return true;
   }
 
   /**

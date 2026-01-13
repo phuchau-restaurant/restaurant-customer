@@ -17,6 +17,7 @@ import {
 } from "../services/menuService";
 import Pagination from "../components/Pagination/Pagination";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
+import ProfileSidebar from "../components/Profile/ProfileSidebar";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ const MenuScreen = () => {
   const [galleryProduct, setGalleryProduct] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
@@ -400,13 +402,16 @@ const MenuScreen = () => {
 
             {/* Right: Customer Info */}
             <div className="flex items-center gap-2 md:gap-3 bg-gray-50 rounded-full pl-2 md:pl-3 pr-2 py-2 border border-gray-200 w-full sm:w-auto">
-              <div className="relative">
+              <button 
+                onClick={() => setIsProfileOpen(true)}
+                className="relative hover:scale-105 transition-transform cursor-pointer"
+              >
                 <img
                   src={randomAvatar}
                   alt="Avatar"
-                  className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm hover:border-orange-400 transition-colors"
                 />
-              </div>
+              </button>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-semibold text-gray-800 truncate">
                   {displayCustomer.name}
@@ -667,6 +672,13 @@ const MenuScreen = () => {
           initialIndex={0}
         />
       )}
+
+      {/* Profile Sidebar */}
+      <ProfileSidebar
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        customer={customer}
+      />
     </motion.div>
   );
 };

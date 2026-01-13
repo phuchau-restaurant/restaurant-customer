@@ -12,7 +12,14 @@ export class ReviewsRepository extends BaseRepository {
     const entity = new Review(data);
     const dbPayload = entity.toPersistence();
     
+    // Remove undefined fields
     Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
+    
+    // Don't send created_at - let database set it automatically
+    delete dbPayload.created_at;
+
+    // Remove images field as it doesn't exist in DB
+    delete dbPayload.images;
 
     const rawData = await super.create(dbPayload);
     return rawData ? new Review(rawData) : null;
@@ -27,6 +34,10 @@ export class ReviewsRepository extends BaseRepository {
     const entity = new Review(updates);
     const dbPayload = entity.toPersistence();
     Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
+
+    // Remove fields that shouldn't be updated or don't exist
+    delete dbPayload.created_at;
+    delete dbPayload.images;
 
     const rawData = await super.update(id, dbPayload);
     return rawData ? new Review(rawData) : null;
@@ -55,14 +66,43 @@ export class ReviewsRepository extends BaseRepository {
    * Get all reviews by a customer
    */
   async getByCustomerId(customerId) {
-    const { data, error } = await supabase
+    // 1. Get reviews
+    const { data: reviews, error } = await supabase
       .from(this.tableName)
       .select("*")
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(`[Reviews] GetByCustomerId failed: ${error.message}`);
-    return data.map(item => new Review(item));
+    
+    if (!reviews || reviews.length === 0) return [];
+
+    // 2. Get dish details manually
+    const dishIds = [...new Set(reviews.map(r => r.dish_id))];
+    const { data: dishes, error: dishesError } = await supabase
+      .from("dishes")
+      .select("id, name, image_url")
+      .in("id", dishIds);
+
+    if (dishesError) {
+      console.error("Error fetching dishes for reviews:", dishesError);
+      // Return reviews without dish details if fetch fails
+      return reviews.map(item => new Review(item));
+    }
+
+    // 3. Map dish details to reviews
+    const dishMap = {};
+    dishes?.forEach(d => dishMap[d.id] = d);
+
+    return reviews.map(item => {
+      const dish = dishMap[item.dish_id];
+      const reviewWithDish = { 
+        ...item, 
+        dishName: dish?.name, 
+        dishImage: dish?.image_url 
+      };
+      return new Review(reviewWithDish);
+    });
   }
 
   /**
@@ -94,7 +134,6 @@ export class ReviewsRepository extends BaseRepository {
       `)
       .eq("dish_id", dishId)
       .eq("orders.customer_id", customerId)
-      .in("orders.status", ["Completed", "Served"])
       .limit(1);
 
     if (error) throw new Error(`[Reviews] HasCustomerOrderedDish failed: ${error.message}`);

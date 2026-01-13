@@ -9,6 +9,10 @@ export class Review {
     this.comment = data.comment;
     this.images = data.images;
     this.createdAt = data.created_at || data.createdAt;
+    
+    // Map joined menu data
+    this.dishName = data.menus?.name || data.dishName;
+    this.dishImage = data.menus?.image || data.dishImage;
   }
 
   toPersistence() {
@@ -33,6 +37,8 @@ export class Review {
       comment: this.comment,
       images: this.images,
       createdAt: this.createdAt,
+      dishName: this.dishName,
+      dishImage: this.dishImage,
     };
   }
 }

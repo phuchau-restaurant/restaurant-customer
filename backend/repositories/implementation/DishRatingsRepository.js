@@ -57,14 +57,36 @@ export class DishRatingsRepository extends BaseRepository {
     
     Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
 
-    const { data: result, error } = await supabase
+    // 1. Check if exists using dish_id
+    const { data: existing } = await supabase
       .from(this.tableName)
-      .upsert(dbPayload, {
-        onConflict: 'dish_id',
-        returning: true
-      })
-      .select()
+      .select("id")
+      .eq("dish_id", dbPayload.dish_id)
       .single();
+
+    let result;
+    let error;
+
+    if (existing) {
+      // 2. Update if exists
+      const response = await supabase
+        .from(this.tableName)
+        .update(dbPayload)
+        .eq("id", existing.id)
+        .select()
+        .single();
+      result = response.data;
+      error = response.error;
+    } else {
+      // 3. Insert if new
+      const response = await supabase
+        .from(this.tableName)
+        .insert(dbPayload)
+        .select()
+        .single();
+      result = response.data;
+      error = response.error;
+    }
 
     if (error) throw new Error(`[DishRatings] Upsert failed: ${error.message}`);
     return result ? new DishRating(result) : null;

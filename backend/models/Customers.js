@@ -12,6 +12,8 @@ export class Customers {
     // Sử dụng ?? thay vì || để số 0 được chấp nhận
     // Nếu cả 2 đều null/undefined thì gán mặc định là 0
     this.loyaltyPoints = data.loyalty_points ?? data.loyaltyPoints ?? 0;
+    this.avatar = data.avatar ?? null;
+    this.googleId = data.google_id ?? data.googleId ?? null;
   }
 
   toPersistence() {
@@ -24,6 +26,8 @@ export class Customers {
       password: this.password,
       is_active: this.isActive,
       loyalty_points: this.loyaltyPoints,
+      avatar: this.avatar,
+      google_id: this.googleId,
     };
   }
 }

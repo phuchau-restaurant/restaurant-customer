@@ -4,6 +4,9 @@ import{ isValidFullName } from "../../helpers/validationHelper.js";
 import bcrypt from "bcryptjs";
 import emailService from "../emailService.js";
 import { generateOTP, saveOTP } from "../../helpers/otpHelper.js";
+import { OAuth2Client } from "google-auth-library";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Will need GOOGLE_CLIENT_ID in .env
 
 class CustomersService {
   constructor(customerRepository) {
@@ -284,6 +287,189 @@ class CustomersService {
     // Update isActive to true
     const updated = await this.customerRepo.update(customer.id, { isActive: true });
     return updated;
+  }
+
+  /**
+   * Update customer profile (name, email, phone)
+   * @param {string} customerId 
+   * @param {string} tenantId 
+   * @param {object} profileData - { fullName, email, phoneNumber }
+   */
+  async updateProfile(customerId, tenantId, profileData) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    // Get current customer to verify ownership
+    const customer = await this.getCustomerById(customerId, tenantId);
+    
+    const updates = {};
+
+    // Validate and prepare updates
+    if (profileData.fullName !== undefined) {
+      if (!profileData.fullName.trim()) {
+        throw new Error("Full name cannot be empty");
+      }
+      if (!isValidFullName(profileData.fullName.trim())) {
+        throw new Error("Invalid full name format");
+      }
+      updates.fullName = profileData.fullName.trim();
+    }
+
+    if (profileData.email !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(profileData.email.trim())) {
+        throw new Error("Invalid email format");
+      }
+      // Check if email is already used by another customer
+      const existingByEmail = await this.customerRepo.findByEmail(tenantId, profileData.email.trim());
+      const isDuplicate = existingByEmail.some(cust => cust.id !== customerId);
+      if (isDuplicate) {
+        throw new Error("Email already in use");
+      }
+      updates.email = profileData.email.trim();
+    }
+
+    if (profileData.phoneNumber !== undefined) {
+      if (!isValidPhoneNumber(profileData.phoneNumber.trim())) {
+        throw new Error("Invalid phone number format");
+      }
+      // Check if phone is already used by another customer
+      const existingByPhone = await this.customerRepo.findByPhoneNumber(tenantId, profileData.phoneNumber.trim());
+      const isDuplicate = existingByPhone.some(cust => cust.id !== customerId);
+      if (isDuplicate) {
+        throw new Error("Phone number already in use");
+      }
+      updates.phoneNumber = profileData.phoneNumber.trim();
+    }
+
+    if (Object.keys(updates).length === 0) {
+      throw new Error("No valid fields to update");
+    }
+
+    return await this.customerRepo.update(customerId, updates);
+  }
+
+  /**
+   * Change customer password
+   * @param {string} customerId 
+   * @param {string} currentPassword 
+   * @param {string} newPassword 
+   */
+  async changePassword(customerId, currentPassword, newPassword) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!currentPassword) throw new Error("Current password is required");
+    if (!newPassword) throw new Error("New password is required");
+
+    // Get customer
+    const customer = await this.customerRepo.getById(customerId);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    // Check if customer has a password set
+    if (!customer.password) {
+      throw new Error("This account was not registered with a password");
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, customer.password);
+    if (!isPasswordValid) {
+      throw new Error("Current password is incorrect");
+    }
+
+    // Validate new password
+    if (newPassword.length < 6) {
+      throw new Error("New password must be at least 6 characters");
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    return await this.customerRepo.update(customerId, { password: hashedPassword });
+  }
+
+  /**
+   * Update customer avatar URL
+   * @param {string} customerId 
+   * @param {string} avatarUrl 
+   */
+  async updateAvatar(customerId, avatarUrl) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!avatarUrl) throw new Error("Avatar URL is required");
+
+    const customer = await this.customerRepo.getById(customerId);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    // In future, you might want to add validation for URL format
+    // For now, just update the avatar field
+    return await this.customerRepo.update(customerId, { avatar: avatarUrl });
+  }
+
+  /**
+   * Authenticate OR Register customer with Google
+   * @param {string} tenantId 
+   * @param {string} token - Google ID Token
+   */
+  async authenticateWithGoogle(tenantId, token) {
+    if (!tenantId) throw new Error("Tenant ID is required");
+    if (!token) throw new Error("Google Token is required");
+
+    try {
+      const ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: process.env.GOOGLE_CLIENT_ID, 
+      });
+      const payload = ticket.getPayload();
+      const { email, name, picture, sub: googleId } = payload; // sub is the unique Google ID
+
+      // 1. Try to find by Google ID first
+      let customers = await this.customerRepo.findByGoogleId(tenantId, googleId);
+      let customer = customers[0];
+
+      // 2. If not found, try to find by Email
+      if (!customer) {
+        const customersByEmail = await this.customerRepo.findByEmail(tenantId, email);
+        customer = customersByEmail[0];
+        
+        // If found by email, link Google ID and Avatar
+        if (customer) {
+           await this.customerRepo.update(customer.id, { 
+             googleId: googleId,
+             avatar: picture // Update avatar from Google
+           });
+           customer.googleId = googleId;
+           customer.avatar = picture;
+        }
+      }
+
+      // 3. If still not found, Create new user
+      if (!customer) {
+        // Create a unique placeholder phone number since it's required
+        const placeholderPhone = `G-${Date.now().toString().slice(-9)}`;
+        
+        const newCustomerData = {
+          tenantId,
+          fullName: name,
+          email: email,
+          googleId: googleId,
+          avatar: picture,
+          isActive: true, // Google users are verified implicitly
+          phoneNumber: placeholderPhone, 
+          password: null, 
+          loyaltyPoints: 0
+        };
+        customer = await this.customerRepo.create(newCustomerData);
+      }
+
+      return customer;
+      
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      throw new Error("Google authentication failed: " + error.message);
+    }
   }
 }
 

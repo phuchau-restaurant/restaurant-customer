@@ -33,15 +33,21 @@ function AppRoutes() {
   );
 }
 
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
 function App() {
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_PLACEHOLDER";
+
   return (
-    <BrowserRouter>
-      <CustomerProvider>
-        <div className="h-screen w-screen">
-          <AppRoutes />
-        </div>
-      </CustomerProvider>
-    </BrowserRouter>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <BrowserRouter>
+        <CustomerProvider>
+          <div className="h-screen w-screen">
+            <AppRoutes />
+          </div>
+        </CustomerProvider>
+      </BrowserRouter>
+    </GoogleOAuthProvider>
   );
 }
 

@@ -46,8 +46,11 @@ export const CustomerProvider = ({ children }) => {
 
   const login = (customerData) => {
     const normalized = {
+      ...customerData, // Keep all original fields (id, email, avatar, etc.)
       name: (customerData.fullName || customerData.name || "").trim(),
-      phoneNumber: customerData.phoneNumber,
+      phoneNumber: customerData.phoneNumber || customerData.phone_number,
+      email: customerData.email,
+      avatar: customerData.avatar,
       loyaltyPoints:
         typeof customerData.loyaltyPoints === "number"
           ? customerData.loyaltyPoints

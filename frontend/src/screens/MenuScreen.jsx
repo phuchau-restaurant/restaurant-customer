@@ -16,7 +16,9 @@ import {
   submitOrder,
 } from "../services/menuService";
 import Pagination from "../components/Pagination/Pagination";
+import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
+import ProfileSidebar from "../components/Profile/ProfileSidebar";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -34,6 +36,7 @@ const MenuScreen = () => {
   const [galleryProduct, setGalleryProduct] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
@@ -199,11 +202,16 @@ const MenuScreen = () => {
     }, 100);
   };
 
-  const randomAvatar = useMemo(() => {
-    if (avatarUrl.length === 0) return "/images/avatar/default_avt.svg";
-    const index = Math.floor(Math.random() * avatarUrl.length);
-    return avatarUrl[index];
-  }, [avatarUrl]);
+  const displayAvatar = useMemo(() => {
+    // 1. Use customer's avatar if available
+    if (customer?.avatar) return customer.avatar;
+    
+    // 2. Use first avatar from app settings if available
+    if (avatarUrl && avatarUrl.length > 0) return avatarUrl[0];
+
+    // 3. Fallback
+    return "/images/avatar/default_avt.svg";
+  }, [customer?.avatar, avatarUrl]);
 
   // Default customer khi chưa login hoặc đã logout
   const defaultCustomer = {
@@ -400,13 +408,16 @@ const MenuScreen = () => {
 
             {/* Right: Customer Info */}
             <div className="flex items-center gap-2 md:gap-3 bg-gray-50 rounded-full pl-2 md:pl-3 pr-2 py-2 border border-gray-200 w-full sm:w-auto">
-              <div className="relative">
+              <button 
+                onClick={() => setIsProfileOpen(true)}
+                className="relative hover:scale-105 transition-transform cursor-pointer"
+              >
                 <img
-                  src={randomAvatar}
+                  src={displayAvatar}
                   alt="Avatar"
-                  className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm hover:border-orange-400 transition-colors"
                 />
-              </div>
+              </button>
               <div className="flex-1 min-w-0">
                 <p className="text-xs md:text-sm font-semibold text-gray-800 truncate">
                   {displayCustomer.name}
@@ -564,28 +575,11 @@ const MenuScreen = () => {
       </div>
 
       {!isCartOpen && totalItems > 0 && (
-        <motion.button
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          transition={{ duration: 0.3 }}
+        <FloatingCartButton
+          totalItems={totalItems}
+          totalAmount={totalAmount}
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-linear-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-2xl shadow-orange-400/50 hover:shadow-orange-500/60 hover:scale-105 transition-all duration-300 z-40 flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4"
-        >
-          <div className="relative">
-            <ShoppingCart size={24} className="md:hidden" />
-            <ShoppingCart size={28} className="hidden md:block" />
-            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              {totalItems}
-            </span>
-          </div>
-          <div className="flex flex-col items-start">
-            <span className="text-[10px] md:text-xs opacity-90">Tổng cộng</span>
-            <span className="font-bold text-base md:text-lg">
-              {totalAmount.toLocaleString("vi-VN")}₫
-            </span>
-          </div>
-        </motion.button>
+        />
       )}
 
       <div
@@ -667,6 +661,14 @@ const MenuScreen = () => {
           initialIndex={0}
         />
       )}
+
+      {/* Profile Sidebar */}
+      <ProfileSidebar
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        customer={displayCustomer}
+        currentAvatar={displayAvatar}
+      />
     </motion.div>
   );
 };

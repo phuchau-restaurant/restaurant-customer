@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
 import { motion } from "framer-motion";
+import GoogleLoginButton from "../components/Auth/GoogleLoginButton";
 import {
   Utensils,
   Phone,
@@ -579,6 +580,17 @@ const CustomerLoginScreen = () => {
                   </>
                 )}
               </motion.button>
+
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">Hoặc</span>
+                  </div>
+                </div>
+
+                <GoogleLoginButton />
             </form>
 
             {/* Register Link */}

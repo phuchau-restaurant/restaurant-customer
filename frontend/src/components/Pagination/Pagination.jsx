@@ -89,71 +89,77 @@ const Pagination = ({
   const endItem = Math.min(currentPage * pageSize, totalItems);
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 bg-white border-t border-gray-200">
-      {/* Items Info */}
-      <div className="text-sm text-gray-600">
-        Hiển thị <span className="font-semibold text-gray-800">{startItem}</span> -{' '}
-        <span className="font-semibold text-gray-800">{endItem}</span> trong tổng số{' '}
-        <span className="font-semibold text-gray-800">{totalItems}</span> món
+    <div className="flex flex-col gap-3 px-4 md:px-6 py-3 md:py-4 bg-white border-t border-gray-200">
+      {/* Row 1: Items Info + Page Size on Mobile, spreads on Desktop */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Items Info */}
+        <div className="text-xs md:text-sm text-gray-600">
+          <span className="font-semibold text-gray-800">{startItem}-{endItem}</span>
+          <span className="hidden sm:inline"> trong tổng </span>
+          <span className="sm:hidden"> / </span>
+          <span className="font-semibold text-gray-800">{totalItems}</span>
+        </div>
+
+        {/* Page Size Selector */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="pageSize" className="text-xs md:text-sm text-gray-600 whitespace-nowrap">
+            Món/trang:
+          </label>
+          <select
+            id="pageSize"
+            value={pageSize}
+            onChange={handlePageSizeChange}
+            className="px-2 md:px-3 py-1 md:py-1.5 border border-gray-300 rounded-lg text-xs md:text-sm font-medium text-gray-700 bg-white hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200 cursor-pointer transition-all"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Page Size Selector */}
-      <div className="flex items-center gap-2">
-        <label htmlFor="pageSize" className="text-sm text-gray-600">
-          Số món/trang:
-        </label>
-        <select
-          id="pageSize"
-          value={pageSize}
-          onChange={handlePageSizeChange}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-200 cursor-pointer transition-all"
-        >
-          {pageSizeOptions.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Pagination Controls */}
-      <div className="flex items-center gap-1">
+      {/* Row 2: Pagination Controls - Centered */}
+      <div className="flex items-center justify-center gap-0.5 md:gap-1">
         {/* First Page */}
         <button
           onClick={() => handlePageChange(1)}
           disabled={currentPage === 1}
-          className={`p-2 rounded-lg transition-all ${
+          className={`p-1.5 md:p-2 rounded-lg transition-all ${
             currentPage === 1
               ? 'text-gray-300 cursor-not-allowed'
               : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
           }`}
           title="Trang đầu"
         >
-          <ChevronsLeft size={18} />
+          <ChevronsLeft size={16} className="md:hidden" />
+          <ChevronsLeft size={18} className="hidden md:block" />
         </button>
 
         {/* Previous Page */}
         <button
           onClick={() => handlePageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className={`p-2 rounded-lg transition-all ${
+          className={`p-1.5 md:p-2 rounded-lg transition-all ${
             currentPage === 1
               ? 'text-gray-300 cursor-not-allowed'
               : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
           }`}
           title="Trang trước"
         >
-          <ChevronLeft size={18} />
+          <ChevronLeft size={16} className="md:hidden" />
+          <ChevronLeft size={18} className="hidden md:block" />
         </button>
 
         {/* Page Numbers */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 md:gap-1 mx-1">
           {pageNumbers.map((page, index) => {
             if (page === '...') {
               return (
                 <span
                   key={`ellipsis-${index}`}
-                  className="px-3 py-1.5 text-gray-400"
+                  className="px-1 md:px-2 text-gray-400 text-xs md:text-sm"
                 >
                   ...
                 </span>
@@ -164,7 +170,7 @@ const Pagination = ({
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`min-w-[36px] px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`min-w-[28px] md:min-w-[36px] px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
                   currentPage === page
                     ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-md shadow-orange-200'
                     : 'text-gray-700 hover:bg-orange-50 hover:text-orange-600'
@@ -180,28 +186,30 @@ const Pagination = ({
         <button
           onClick={() => handlePageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className={`p-2 rounded-lg transition-all ${
+          className={`p-1.5 md:p-2 rounded-lg transition-all ${
             currentPage === totalPages
               ? 'text-gray-300 cursor-not-allowed'
               : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
           }`}
           title="Trang sau"
         >
-          <ChevronRight size={18} />
+          <ChevronRight size={16} className="md:hidden" />
+          <ChevronRight size={18} className="hidden md:block" />
         </button>
 
         {/* Last Page */}
         <button
           onClick={() => handlePageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className={`p-2 rounded-lg transition-all ${
+          className={`p-1.5 md:p-2 rounded-lg transition-all ${
             currentPage === totalPages
               ? 'text-gray-300 cursor-not-allowed'
               : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
           }`}
           title="Trang cuối"
         >
-          <ChevronsRight size={18} />
+          <ChevronsRight size={16} className="md:hidden" />
+          <ChevronsRight size={18} className="hidden md:block" />
         </button>
       </div>
     </div>

@@ -13,18 +13,20 @@ import MenuScreen from "./screens/MenuScreen";
 import CustomerLoginScreen from "./screens/CustomerLoginScreen";
 import CustomerRegisterScreen from "./screens/CustomerRegisterScreen";
 import CustomerVerifyOTPScreen from "./screens/CustomerVerifyOTPScreen";
+import CustomerGoodbyeScreen from "./screens/CustomerGoodbyeScreen";
 
 function AppRoutes() {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="popLayout">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<CustomerLoginScreen />} />
         <Route path="/register" element={<CustomerRegisterScreen />} />
         <Route path="/verify-otp" element={<CustomerVerifyOTPScreen />} />
         <Route path="/menu" element={<MenuScreen />} />
+        <Route path="/goodbye" element={<CustomerGoodbyeScreen />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </AnimatePresence>

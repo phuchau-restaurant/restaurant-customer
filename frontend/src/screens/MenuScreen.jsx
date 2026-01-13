@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
 import { motion } from "framer-motion";
-import { ShoppingCart, Utensils, LogOut, Search, Filter, ArrowUpDown, X, ChevronDown, Menu } from "lucide-react";
+import { ShoppingCart, Utensils, LogOut, Search, Filter, ArrowUpDown, X, ChevronDown } from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
@@ -16,6 +16,7 @@ import {
   submitOrder,
 } from "../services/menuService";
 import Pagination from "../components/Pagination/Pagination";
+import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ const MenuScreen = () => {
     // Kiểm tra đã login và có thông tin bàn chưa
     if (!tableInfo || !tableInfo.id) {
       showWarning("Vui lòng đăng nhập trước!");
-      setTimeout(() => navigate("/customer/login"), 2000);
+      setTimeout(() => navigate("/login"), 2000);
       return;
     }
 
@@ -192,7 +193,10 @@ const MenuScreen = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/customer/login", { replace: true });
+    // Small delay to ensure smooth transition
+    setTimeout(() => {
+      navigate("/goodbye", { replace: true });
+    }, 100);
   };
 
   const randomAvatar = useMemo(() => {
@@ -200,6 +204,12 @@ const MenuScreen = () => {
     const index = Math.floor(Math.random() * avatarUrl.length);
     return avatarUrl[index];
   }, [avatarUrl]);
+
+  // Default customer khi chưa login hoặc đã logout
+  const defaultCustomer = {
+    name: "Khách hàng",
+    loyaltyPoints: 0,
+  };
 
   // hiển thị customer từ context hoặc default
   const displayCustomer = customer || defaultCustomer;
@@ -376,13 +386,12 @@ const MenuScreen = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             {/* Left: Hamburger + Table Info */}
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* Hamburger Menu Button - Only on Mobile */}
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="lg:hidden flex items-center justify-center w-10 h-10 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
-              >
-                <Menu size={20} />
-              </button>
+              {/* Animated Hamburger Menu Button - Only on Mobile */}
+              <AnimatedHamburger
+                isOpen={isSidebarOpen}
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden"
+              />
               
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-4 md:px-5 py-2 md:py-3 rounded-full shadow-md text-sm md:text-md font-bold text-white">
                 Bàn: {tableInfo?.number || "..."}

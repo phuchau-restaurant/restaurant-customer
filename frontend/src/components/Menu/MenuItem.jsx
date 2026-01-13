@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { Plus, Images, Check, ChevronDown } from "lucide-react";
+import AlertModal from "../Modal/AlertModal";
 
 const MenuItem = ({ product, onAdd, onImageClick }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
+  const [validationModal, setValidationModal] = useState({ isOpen: false, message: "" });
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -17,8 +19,9 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
       const currentSelected = prev[groupId] || [];
       const { minSelections, maxSelections } = group;
       
-      // Nếu maxSelections = 1 hoặc minSelections = 1, chỉ cho phép chọn 1 (radio behavior)
-      if (maxSelections === 1 || minSelections === 1) {
+      // Chỉ áp dụng radio behavior khi maxSelections = 1
+      // (minSelections = 1 không có nghĩa là chỉ chọn được 1, mà là phải chọn ít nhất 1)
+      if (maxSelections === 1) {
         // Nếu click vào option đã chọn, giữ nguyên (không toggle off)
         if (currentSelected.includes(optionId)) {
           return prev;
@@ -140,7 +143,7 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
     // Validate trước khi thêm
     const validation = validateModifiers();
     if (!validation.isValid) {
-      alert(validation.message);
+      setValidationModal({ isOpen: true, message: validation.message });
       return;
     }
     
@@ -203,9 +206,12 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                 const isSingleChoice = group.minSelections === 1;
                 const isOpen = openGroups[group.id];
                 const selectedCount = (selectedModifiers[group.id] || []).length;
+                const isRequiredNotMet = group.isRequired && selectedCount === 0;
                 
                 return (
-                  <div key={group.id} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                  <div key={group.id} className={`bg-gray-50 rounded-lg overflow-hidden border-2 transition-colors ${
+                    isRequiredNotMet ? 'border-red-300' : 'border-gray-200'
+                  }`}>
                     {/* Header - Clickable */}
                     <button
                       onClick={(e) => {
@@ -236,7 +242,7 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                         )}
                       </div>
                       <span className="text-xs text-gray-500">
-                        {group.maxSelections === 1 || group.minSelections === 1 
+                        {group.maxSelections === 1
                           ? "Chọn 1" 
                           : group.minSelections && group.maxSelections
                             ? `Chọn ${group.minSelections}-${group.maxSelections}`
@@ -316,6 +322,15 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
           </button>
         </div>
       </div>
+
+      {/* Validation Modal */}
+      <AlertModal
+        isOpen={validationModal.isOpen}
+        onClose={() => setValidationModal({ isOpen: false, message: "" })}
+        title="Không thể thêm vào giỏ hàng"
+        message={validationModal.message}
+        type="warning"
+      />
     </div>
   );
 };

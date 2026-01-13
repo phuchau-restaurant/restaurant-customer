@@ -359,6 +359,12 @@ export const submitOrder = async ({ tableId, customerId, dishes }) => {
         quantity: item.qty,
         description: item.name,
         note: item.note?.trim() || null,
+        // Thêm modifiers nếu có
+        modifiers: item.selectedModifiers?.map((mod) => ({
+          groupId: mod.groupId,
+          optionId: mod.optionId,
+          price: mod.price
+        })) || []
       })),
     };
 

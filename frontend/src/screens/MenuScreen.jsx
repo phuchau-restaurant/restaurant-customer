@@ -677,7 +677,8 @@ const MenuScreen = () => {
       <ProfileSidebar
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
-        customer={customer}
+        customer={displayCustomer}
+        currentAvatar={randomAvatar}
       />
     </motion.div>
   );

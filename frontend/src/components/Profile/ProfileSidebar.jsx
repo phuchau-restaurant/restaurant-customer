@@ -5,7 +5,7 @@ import ProfileInfo from './ProfileInfo';
 import OrderHistory from './OrderHistory';
 import OrderReviews from './OrderReviews';
 
-const ProfileSidebar = ({ isOpen, onClose, customer }) => {
+const ProfileSidebar = ({ isOpen, onClose, customer, currentAvatar }) => {
   const [activeTab, setActiveTab] = useState('profile');
 
   const tabs = [
@@ -90,7 +90,7 @@ const ProfileSidebar = ({ isOpen, onClose, customer }) => {
                   transition={{ duration: 0.2 }}
                   className="p-6"
                 >
-                  {activeTab === 'profile' && <ProfileInfo customer={customer} />}
+                  {activeTab === 'profile' && <ProfileInfo customer={customer} currentAvatar={currentAvatar} />}
                   {activeTab === 'history' && <OrderHistory customer={customer} />}
                   {activeTab === 'reviews' && <OrderReviews customer={customer} />}
                 </motion.div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Camera, Mail, Phone, Lock, User, Save, Edit2 } from 'lucide-react';
 
-const ProfileInfo = ({ customer }) => {
+const ProfileInfo = ({ customer, currentAvatar }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
@@ -18,7 +18,7 @@ const ProfileInfo = ({ customer }) => {
     confirmPassword: '',
   });
 
-  const [avatarPreview, setAvatarPreview] = useState(customer?.avatar || '/images/avatar/default_avt.svg');
+  const [avatarPreview, setAvatarPreview] = useState(customer?.avatar || currentAvatar || '/images/avatar/default_avt.svg');
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];

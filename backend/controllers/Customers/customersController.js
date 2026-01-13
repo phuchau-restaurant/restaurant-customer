@@ -298,6 +298,134 @@ class CustomersController {
       next(error);
     }
   };
+
+  /**
+   * [GET] /api/customers/profile/:customerId
+   * Get customer profile by ID
+   */
+  getProfile = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { customerId } = req.params;
+
+      const customer = await this.customersService.getCustomerById(customerId, tenantId);
+      
+      // Remove sensitive data
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+      
+      return res.status(200).json({
+        success: true,
+        message: "Profile fetched successfully",
+        data: returnData,
+      });
+    } catch (error) {
+      if (error.message.includes("not found")) error.statusCode = 404;
+      else if (error.message.includes("Access denied")) error.statusCode = 403;
+      next(error);
+    }
+  };
+
+  /**
+   * [PUT] /api/customers/profile/:customerId
+   * Update customer profile (name, email, phone)
+   */
+  updateProfile = async (req, res, next) => {
+    try {
+       const tenantId = req.tenantId;
+      const { customerId } = req.params;
+      const { fullName, email, phoneNumber } = req.body;
+
+      const updatedCustomer = await this.customersService.updateProfile(
+        customerId,
+        tenantId,
+        { fullName, email, phoneNumber }
+      );
+
+      // Remove sensitive data
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = updatedCustomer;
+
+      return res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        data: returnData,
+      });
+    } catch (error) {
+      if (error.message.includes("already in use")) error.statusCode = 409;
+      else error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  /**
+   * [PUT] /api/customers/password/:customerId
+   * Change customer password
+   */
+  changePassword = async (req, res, next) => {
+    try {
+      const { customerId } = req.params;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password and new password are required",
+        });
+      }
+
+      await this.customersService.changePassword(
+        customerId,
+        currentPassword,
+        newPassword
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Password changed successfully",
+      });
+    } catch (error) {
+      if (error.message.includes("incorrect")) {
+        error.statusCode = 401;
+      } else {
+        error.statusCode = 400;
+      }
+      next(error);
+    }
+  };
+
+  /**
+   * [PUT] /api/customers/avatar/:customerId
+   * Update customer avatar
+   */
+  updateAvatar = async (req, res, next) => {
+    try {
+      const { customerId } = req.params;
+      const { avatarUrl } = req.body;
+
+      if (!avatarUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "Avatar URL is required",
+        });
+      }
+
+      const updatedCustomer = await this.customersService.updateAvatar(
+        customerId,
+        avatarUrl
+      );
+
+      // Remove sensitive data
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = updatedCustomer;
+
+      return res.status(200).json({
+        success: true,
+        message: "Avatar updated successfully",
+        data: returnData,
+      });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  };
 }
 
 export default CustomersController;

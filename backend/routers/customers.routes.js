@@ -11,11 +11,20 @@ router.use(tenantMiddleware);
 // QR verification - phải đặt trước các route có params
 router.post("/verify-qr", customersController.verifyQR);
 
-router.get("/", customersController.getAll);
-router.get("/:id", customersController.getById);
+// Authentication routes
 router.post("/login", customersController.customerLogin);
 router.post("/register", customersController.customerRegister);
 router.post("/verify-otp", customersController.verifyOTP);
+
+// Profile management routes (specific routes before generic :id routes)
+router.get("/profile/:customerId", customersController.getProfile);
+router.put("/profile/:customerId", customersController.updateProfile);
+router.put("/password/:customerId", customersController.changePassword);
+router.put("/avatar/:customerId", customersController.updateAvatar);
+
+// Generic CRUD routes
+router.get("/", customersController.getAll);
+router.get("/:id", customersController.getById);
 router.post("/", customersController.create);
 router.put("/:id", customersController.update);
 router.delete("/:id", customersController.delete);

@@ -6,41 +6,91 @@ class MenusController {
     this.categoriesService = categoriesService;
   }
 
-  // [GET] /api/menus/?categoryId=<id>&available=true
+  // [GET] /api/menus/?categoryId=<id>&available=true&pageNumber=1&pageSize=10
   getAll = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
-      const { categoryId, available } = req.query; // Lấy query params
+      const { categoryId, available, pageNumber, pageSize } = req.query; // Lấy query params
       const onlyAvailable = available === "true";
 
-      const data = await this.menusService.getMenusByTenant(
-        tenantId,
-        categoryId,
-        onlyAvailable
-      );
+      // Parse pagination params
+      const page = pageNumber ? parseInt(pageNumber, 10) : null;
+      const limit = pageSize ? parseInt(pageSize, 10) : null;
 
-      // Lọc bỏ tenantId từ danh sách (giữ lại id để frontend dùng fetch photos)
-      const returnData = data.map((item) => {
-        const { tenantId, ...rest } = item;
-        return rest;
-      });
-      //Nếu có categoryId được truyền vào thì lấy nó và search, nếu không thì null
-      //const categoryName = categoryId ? this.categoriesService.getCategoryById(categoryId)?.name + ' category' : '';
-      let categoryName = "";
-      if (categoryId) {
-        const category = await this.categoriesService.getCategoryById(
-          categoryId,
-          tenantId
-        );
-        categoryName = category.name + " category";
+      // Validate pagination params
+      if (page !== null && (isNaN(page) || page < 1)) {
+        return res.status(400).json({
+          success: false,
+          message: "pageNumber must be a positive integer",
+        });
       }
 
-      return res.status(200).json({
-        success: true,
-        message: `Menus fetched ${categoryName} successfully`,
-        total: returnData.length,
-        data: returnData,
-      });
+      if (limit !== null && (isNaN(limit) || limit < 1 || limit > 100)) {
+        return res.status(400).json({
+          success: false,
+          message: "pageSize must be between 1 and 100",
+        });
+      }
+
+      const result = await this.menusService.getMenusByTenant(
+        tenantId,
+        categoryId,
+        onlyAvailable,
+        page,
+        limit
+      );
+
+      // Check if result is paginated (object with data property) or just array
+      const isPaginated = result && typeof result === 'object' && 'data' in result;
+
+      if (isPaginated) {
+        // Paginated response
+        const returnData = result.data.map((item) => {
+          const { tenantId, ...rest } = item;
+          return rest;
+        });
+
+        let categoryName = "";
+        if (categoryId) {
+          const category = await this.categoriesService.getCategoryById(
+            categoryId,
+            tenantId
+          );
+          categoryName = category.name + " category";
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: `Menus fetched ${categoryName} successfully`,
+          total: result.total,
+          totalPages: result.totalPages,
+          currentPage: result.currentPage,
+          pageSize: result.pageSize,
+          data: returnData,
+        });
+      } else {
+        // Non-paginated response (backward compatibility)
+        const returnData = result.map((item) => {
+          const { tenantId, ...rest } = item;
+          return rest;
+        });
+
+        let categoryName = "";
+        if (categoryId) {
+          const category = await this.categoriesService.getCategoryById(
+            categoryId,
+            tenantId
+          );
+          categoryName = category.name + " category";
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: `Menus fetched ${categoryName} successfully`,
+          total: returnData.length,
+          data: returnData,
+        });
+      }
     } catch (error) {
       next(error);
     }

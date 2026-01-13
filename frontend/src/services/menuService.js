@@ -256,23 +256,33 @@ const mapMenuItem = (item, index, getCategoryName = () => "0") => ({
 });
 
 /**
- * Fetch all menus with optional category filter
- * GET /api/menus?categoryId=...
+ * Fetch all menus with optional category filter and pagination
+ * GET /api/menus?categoryId=...&pageNumber=...&pageSize=...
  * @param {Object} options - Options object
  * @param {number} options.categoryId - Category ID filter (optional)
  * @param {Array} options.categories - Categories array for mapping
  * @param {string} options.activeCategory - Active category ID
- * @returns {Promise<Array>} Array of products with details
+ * @param {number} options.pageNumber - Page number (1-indexed)
+ * @param {number} options.pageSize - Items per page
+ * @returns {Promise<Object>} Object with products array and pagination metadata
  */
 export const fetchMenus = async ({
   categoryId = null,
   categories = [],
   activeCategory = "0",
+  pageNumber = null,
+  pageSize = null,
 } = {}) => {
   try {
     const queryParams = new URLSearchParams();
     if (categoryId) {
       queryParams.append("categoryId", categoryId);
+    }
+    if (pageNumber) {
+      queryParams.append("pageNumber", pageNumber);
+    }
+    if (pageSize) {
+      queryParams.append("pageSize", pageSize);
     }
 
     const url = `${BASE_URL}/api/menus${
@@ -309,10 +319,22 @@ export const fetchMenus = async ({
       mapped.map((dish) => fetchDishDetails(dish))
     );
 
+    // Return with pagination metadata if available
+    if (result.totalPages !== undefined) {
+      return {
+        products: dishesWithDetails,
+        total: result.total,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        pageSize: result.pageSize,
+      };
+    }
+
+    // Backward compatibility: return just products array
     return dishesWithDetails;
   } catch (error) {
     console.error("Fetch menus error:", error);
-    return [];
+    return pageNumber ? { products: [], total: 0, totalPages: 0, currentPage: 1, pageSize: pageSize || 10 } : [];
   }
 };
 

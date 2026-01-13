@@ -15,6 +15,7 @@ import {
   fetchAvatarUrls,
   submitOrder,
 } from "../services/menuService";
+import Pagination from "../components/Pagination/Pagination";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -36,6 +37,12 @@ const MenuScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("default");
   const [priceFilter, setPriceFilter] = useState("all");
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMenuItems, setTotalMenuItems] = useState(0);
 
   // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
@@ -75,13 +82,28 @@ const MenuScreen = () => {
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
         const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
         
-        const products = await fetchMenus({
+        // Disable pagination when searching/filtering (client-side filtering)
+        const hasClientFilter = searchQuery || sortBy !== "default" || priceFilter !== "all";
+        
+        const result = await fetchMenus({
           categoryId,
           categories,
           activeCategory,
+          pageNumber: hasClientFilter ? null : currentPage,
+          pageSize: hasClientFilter ? null : pageSize,
         });
         
-        setProducts(products);
+        // Handle paginated response
+        if (result && typeof result === 'object' && 'products' in result) {
+          setProducts(result.products);
+          setTotalPages(result.totalPages || 1);
+          setTotalMenuItems(result.total || 0);
+        } else {
+          // Backward compatibility: if result is just an array
+          setProducts(result);
+          setTotalPages(1);
+          setTotalMenuItems(result.length);
+        }
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
       } finally {
@@ -93,7 +115,7 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories, isInitialLoad]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter]);
 
   // Filter and Sort Logic
   const filteredAndSortedProducts = useMemo(() => {
@@ -132,6 +154,22 @@ const MenuScreen = () => {
 
     return result;
   }, [products, searchQuery, sortBy, priceFilter]);
+
+  // Pagination Handlers
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  // Reset to page 1 when changing category
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory]);
 
   // Submit order handler
   const handleSubmitOrder = async () => {
@@ -462,6 +500,23 @@ const MenuScreen = () => {
             ))
           )}
         </motion.div>
+
+        {/* Pagination Component - Only show when not searching/filtering */}
+        {!isLoadingMenu && 
+         filteredAndSortedProducts.length > 0 && 
+         !searchQuery && 
+         sortBy === "default" && 
+         priceFilter === "all" && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={totalMenuItems}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            pageSizeOptions={[12, 24, 36, 48]}
+          />
+        )}
       </div>
 
       {!isCartOpen && totalItems > 0 && (

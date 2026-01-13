@@ -75,11 +75,52 @@ async getById(id) {
     const rawData = await super.getById(id); // Gọi cha lấy raw data
     return rawData ? new Menus(rawData) : null; // Map sang Model
 }
- async getAll(filters = {}) {
-    // Gọi hàm cha để lấy data thô (đã xử lý logic filter)
-    const rawData = await super.getAll(filters);
-    // Map sang Model
-    return rawData.map(item => new Menus(item));
+  /**
+   * Get all menus with pagination support
+   * @param {Object} filters - Filter conditions
+   * @param {number} pageNumber - Page number (1-indexed)
+   * @param {number} pageSize - Number of items per page
+   * @returns {Promise<Object>} Object with data, total, totalPages, currentPage
+   */
+  async getAll(filters = {}, pageNumber = null, pageSize = null) {
+    let query = supabase.from(this.tableName).select('*', { count: 'exact' });
+
+    // Apply filters
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        query = query.eq(key, value);
+      }
+    });
+
+    // Get total count first
+    const { count: totalCount } = await query;
+
+    // Apply pagination if provided
+    if (pageNumber && pageSize) {
+      const from = (pageNumber - 1) * pageSize;
+      const to = from + pageSize - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: rawData, error } = await query;
+
+    if (error) throw new Error(`GetAll failed: ${error.message}`);
+
+    const mappedData = rawData.map(item => new Menus(item));
+
+    // Return paginated response if pagination params provided
+    if (pageNumber && pageSize) {
+      return {
+        data: mappedData,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / pageSize),
+        currentPage: pageNumber,
+        pageSize: pageSize,
+      };
+    }
+
+    // Return just data if no pagination
+    return mappedData;
   }
 
 

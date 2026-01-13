@@ -13,6 +13,7 @@ import MenuScreen from "./screens/MenuScreen";
 import CustomerLoginScreen from "./screens/CustomerLoginScreen";
 import CustomerRegisterScreen from "./screens/CustomerRegisterScreen";
 import CustomerVerifyOTPScreen from "./screens/CustomerVerifyOTPScreen";
+import CustomerForgotPasswordScreen from "./screens/CustomerForgotPasswordScreen";
 import CustomerGoodbyeScreen from "./screens/CustomerGoodbyeScreen";
 
 function AppRoutes() {
@@ -25,6 +26,7 @@ function AppRoutes() {
         <Route path="/login" element={<CustomerLoginScreen />} />
         <Route path="/register" element={<CustomerRegisterScreen />} />
         <Route path="/verify-otp" element={<CustomerVerifyOTPScreen />} />
+        <Route path="/forgot-password" element={<CustomerForgotPasswordScreen />} />
         <Route path="/menu" element={<MenuScreen />} />
         <Route path="/goodbye" element={<CustomerGoodbyeScreen />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

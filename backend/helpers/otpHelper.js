@@ -32,9 +32,10 @@ export function saveOTP(email, otp) {
  * Verify OTP
  * @param {string} email 
  * @param {string} otp 
+ * @param {boolean} keepOtp - If true, do not delete OTP after valid check
  * @returns {boolean}
  */
-export function verifyOTP(email, otp) {
+export function verifyOTP(email, otp, keepOtp = false) {
   const stored = otpStore.get(email.toLowerCase());
   
   if (!stored) {
@@ -55,7 +56,9 @@ export function verifyOTP(email, otp) {
   
   // Verify OTP
   if (stored.otp === otp) {
-    otpStore.delete(email.toLowerCase()); // Remove after successful verification
+    if (!keepOtp) {
+      otpStore.delete(email.toLowerCase()); // Remove after successful verification
+    }
     return { valid: true };
   } else {
     stored.attempts++;

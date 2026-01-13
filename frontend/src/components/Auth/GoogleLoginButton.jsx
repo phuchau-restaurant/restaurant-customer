@@ -55,7 +55,8 @@ const GoogleLoginButton = () => {
         onError={handleError}
         useOneTap
         shape="pill"
-        width="100%"
+        // width="100%" // Google does not support percentage width
+        width="320" 
         theme="outline"
       />
     </div>

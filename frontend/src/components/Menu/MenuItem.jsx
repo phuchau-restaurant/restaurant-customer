@@ -1,11 +1,10 @@
 import React, { useState } from "react";
-import { Plus, Images, Check, ChevronDown } from "lucide-react";
-import AlertModal from "../Modal/AlertModal";
+import { Plus, Images, Check, ChevronDown, AlertCircle } from "lucide-react";
 
 const MenuItem = ({ product, onAdd, onImageClick }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
-  const [validationModal, setValidationModal] = useState({ isOpen: false, message: "" });
+  const [validationMessage, setValidationMessage] = useState("");
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -111,7 +110,7 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
       
       const selectedCount = (selectedModifiers[group.id] || []).length;
       
-      // Kiểm tra isRequired và minSelections
+      // Kiểm tra isRequired - Nếu bắt buộc thì phải chọn ít nhất 1
       if (group.isRequired && selectedCount === 0) {
         return {
           isValid: false,
@@ -119,15 +118,20 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
         };
       }
       
-      if (group.minSelections && selectedCount < group.minSelections) {
+      // Chỉ validate minSelections/maxSelections nếu:
+      // 1. Group bắt buộc (isRequired = true), HOẶC
+      // 2. User đã bắt đầu chọn (selectedCount > 0)
+      const shouldValidateRange = group.isRequired || selectedCount > 0;
+      
+      if (shouldValidateRange && group.minSelections && selectedCount < group.minSelections) {
         return {
           isValid: false,
           message: `"${group.name}" yêu cầu chọn ít nhất ${group.minSelections} tùy chọn`
         };
       }
       
-      // Kiểm tra maxSelections (đã được enforce ở handleModifierSelect, nhưng double-check)
-      if (group.maxSelections && selectedCount > group.maxSelections) {
+      // maxSelections luôn validate nếu user đã chọn (không cho vượt quá)
+      if (selectedCount > 0 && group.maxSelections && selectedCount > group.maxSelections) {
         return {
           isValid: false,
           message: `"${group.name}" chỉ cho phép chọn tối đa ${group.maxSelections} tùy chọn`
@@ -143,9 +147,14 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
     // Validate trước khi thêm
     const validation = validateModifiers();
     if (!validation.isValid) {
-      setValidationModal({ isOpen: true, message: validation.message });
+      setValidationMessage(validation.message);
+      // Auto-hide sau 5 giây
+      setTimeout(() => setValidationMessage(""), 5000);
       return;
     }
+    
+    // Clear validation message nếu valid
+    setValidationMessage("");
     
     const modifiersData = getSelectedModifiersData();
     const modifiersPrice = modifiersData.reduce((sum, m) => sum + m.price, 0);
@@ -303,7 +312,18 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2">
+        
+        {/* Inline Validation Message */}
+        {validationMessage && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 animate-shake">
+            <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 font-medium">
+              {validationMessage}
+            </p>
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between gap-2 mt-3">
           <div className="flex flex-col">
             <p className="text-amber-600 text-[30px] font-smooch-sans font-bold leading-none">
               {calculateTotalPrice().toLocaleString("vi-VN")}đ
@@ -322,15 +342,6 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
           </button>
         </div>
       </div>
-
-      {/* Validation Modal */}
-      <AlertModal
-        isOpen={validationModal.isOpen}
-        onClose={() => setValidationModal({ isOpen: false, message: "" })}
-        title="Không thể thêm vào giỏ hàng"
-        message={validationModal.message}
-        type="warning"
-      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { Plus, Images, Check, ChevronDown } from "lucide-react";
 const MenuItem = ({ product, onAdd, onImageClick }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
+  const [limitWarning, setLimitWarning] = useState(null);
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -12,24 +13,35 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
   const extraPhotosCount = photoCount > 1 ? photoCount - 1 : 0;
 
   // Xử lý chọn modifier
-  const handleModifierSelect = (groupId, optionId, minSelections) => {
+  const handleModifierSelect = (groupId, optionId, group) => {
     setSelectedModifiers((prev) => {
       const currentSelected = prev[groupId] || [];
+      const maxSelections = group.maxSelections || 1;
+      const minSelections = group.minSelections || 0;
       
-      // Nếu minSelections = 1, chỉ cho phép chọn 1 (radio behavior)
-      if (minSelections === 1) {
-        return { ...prev, [groupId]: [optionId] };
-      }
-      
-      // Multiple selection (checkbox behavior)
+      // Nếu đang bỏ chọn (deselect)
       if (currentSelected.includes(optionId)) {
         return {
           ...prev,
           [groupId]: currentSelected.filter((id) => id !== optionId),
         };
-      } else {
-        return { ...prev, [groupId]: [...currentSelected, optionId] };
       }
+      
+      // Nếu đang chọn thêm (select)
+      // Check max_selections limit
+      if (currentSelected.length >= maxSelections) {
+        // Nếu maxSelections = 1, thay thế option cũ (radio behavior)
+        if (maxSelections === 1) {
+          return { ...prev, [groupId]: [optionId] };
+        }
+        // Nếu maxSelections > 1 và đã đạt giới hạn, hiển thị warning
+        setLimitWarning(`Bạn chỉ có thể chọn tối đa ${maxSelections} tùy chọn cho "${group.name}"`);
+        setTimeout(() => setLimitWarning(null), 3000);
+        return prev;
+      }
+      
+      // Chọn thêm option mới
+      return { ...prev, [groupId]: [...currentSelected, optionId] };
     });
   };
 
@@ -84,6 +96,27 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
 
   // Handle add với modifiers
   const handleAddToCart = () => {
+    // Validate required modifiers và min_selections
+    if (product.modifierGroups && product.modifierGroups.length > 0) {
+      for (const group of product.modifierGroups) {
+        if (!group.isActive) continue;
+        
+        const selectedCount = (selectedModifiers[group.id] || []).length;
+        
+        // Kiểm tra required
+        if (group.isRequired && selectedCount === 0) {
+          alert(`Vui lòng chọn ít nhất một tùy chọn cho "${group.name}"`);
+          return;
+        }
+        
+        // Kiểm tra min_selections
+        if (group.minSelections > 0 && selectedCount < group.minSelections) {
+          alert(`Vui lòng chọn ít nhất ${group.minSelections} tùy chọn cho "${group.name}"`);
+          return;
+        }
+      }
+    }
+    
     const modifiersData = getSelectedModifiersData();
     const modifiersPrice = modifiersData.reduce((sum, m) => sum + m.price, 0);
     onAdd({
@@ -134,6 +167,13 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
             </p>
           )}
           
+          {/* Warning Message */}
+          {limitWarning && (
+            <div className="mt-3 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-2 rounded-lg text-sm font-medium animate-pulse">
+              ⚠️ {limitWarning}
+            </div>
+          )}
+          
           {/* Modifier Groups */}
           {product.modifierGroups && product.modifierGroups.length > 0 && (
             <div className="mt-4 space-y-3">
@@ -176,7 +216,12 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                         )}
                       </div>
                       <span className="text-xs text-gray-500">
-                        {isSingleChoice ? "Chọn 1" : "Chọn nhiều"}
+                        {group.maxSelections === 1 
+                          ? "Chọn 1" 
+                          : group.minSelections > 0 && group.maxSelections > 1
+                          ? `Chọn ${group.minSelections}-${group.maxSelections}`
+                          : `Chọn tối đa ${group.maxSelections}`
+                        }
                       </span>
                     </button>
                     
@@ -190,7 +235,7 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                               key={option.id}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleModifierSelect(group.id, option.id, group.minSelections);
+                                handleModifierSelect(group.id, option.id, group);
                               }}
                               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
                                 isSelected

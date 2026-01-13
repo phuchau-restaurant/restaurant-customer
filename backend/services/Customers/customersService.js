@@ -4,6 +4,9 @@ import{ isValidFullName } from "../../helpers/validationHelper.js";
 import bcrypt from "bcryptjs";
 import emailService from "../emailService.js";
 import { generateOTP, saveOTP } from "../../helpers/otpHelper.js";
+import { OAuth2Client } from "google-auth-library";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Will need GOOGLE_CLIENT_ID in .env
 
 class CustomersService {
   constructor(customerRepository) {
@@ -403,6 +406,70 @@ class CustomersService {
     // In future, you might want to add validation for URL format
     // For now, just update the avatar field
     return await this.customerRepo.update(customerId, { avatar: avatarUrl });
+  }
+
+  /**
+   * Authenticate OR Register customer with Google
+   * @param {string} tenantId 
+   * @param {string} token - Google ID Token
+   */
+  async authenticateWithGoogle(tenantId, token) {
+    if (!tenantId) throw new Error("Tenant ID is required");
+    if (!token) throw new Error("Google Token is required");
+
+    try {
+      const ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: process.env.GOOGLE_CLIENT_ID, 
+      });
+      const payload = ticket.getPayload();
+      const { email, name, picture, sub: googleId } = payload; // sub is the unique Google ID
+
+      // 1. Try to find by Google ID first
+      let customers = await this.customerRepo.findByGoogleId(tenantId, googleId);
+      let customer = customers[0];
+
+      // 2. If not found, try to find by Email
+      if (!customer) {
+        const customersByEmail = await this.customerRepo.findByEmail(tenantId, email);
+        customer = customersByEmail[0];
+        
+        // If found by email, link Google ID and Avatar
+        if (customer) {
+           await this.customerRepo.update(customer.id, { 
+             googleId: googleId,
+             avatar: picture // Update avatar from Google
+           });
+           customer.googleId = googleId;
+           customer.avatar = picture;
+        }
+      }
+
+      // 3. If still not found, Create new user
+      if (!customer) {
+        // Create a unique placeholder phone number since it's required
+        const placeholderPhone = `G-${Date.now().toString().slice(-9)}`;
+        
+        const newCustomerData = {
+          tenantId,
+          fullName: name,
+          email: email,
+          googleId: googleId,
+          avatar: picture,
+          isActive: true, // Google users are verified implicitly
+          phoneNumber: placeholderPhone, 
+          password: null, 
+          loyaltyPoints: 0
+        };
+        customer = await this.customerRepo.create(newCustomerData);
+      }
+
+      return customer;
+      
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      throw new Error("Google authentication failed: " + error.message);
+    }
   }
 }
 

@@ -15,6 +15,7 @@ router.post("/verify-qr", customersController.verifyQR);
 router.post("/login", customersController.customerLogin);
 router.post("/register", customersController.customerRegister);
 router.post("/verify-otp", customersController.verifyOTP);
+router.post("/auth/google", customersController.googleAuth);
 
 // Profile management routes (specific routes before generic :id routes)
 router.get("/profile/:customerId", customersController.getProfile);

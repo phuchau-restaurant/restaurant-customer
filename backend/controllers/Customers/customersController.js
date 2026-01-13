@@ -426,6 +426,34 @@ class CustomersController {
       next(error);
     }
   };
+
+  /**
+   * [POST] /api/customers/auth/google
+   * Google Sign-In
+   */
+  googleAuth = async (req, res, next) => {
+    const tenantId = req.tenantId;
+    const { token } = req.body;
+
+    try {
+      if (!token) {
+        return res.status(400).json({ message: "Google token is required" });
+      }
+
+      const customer = await this.customersService.authenticateWithGoogle(tenantId, token);
+
+      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+
+      return res.status(200).json({
+        success: true,
+        message: "Google login successful",
+        data: returnData
+      });
+    } catch (error) {
+       error.statusCode = 400;
+       next(error);
+    }
+  };
 }
 
 export default CustomersController;

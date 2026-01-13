@@ -202,11 +202,16 @@ const MenuScreen = () => {
     }, 100);
   };
 
-  const randomAvatar = useMemo(() => {
-    if (avatarUrl.length === 0) return "/images/avatar/default_avt.svg";
-    const index = Math.floor(Math.random() * avatarUrl.length);
-    return avatarUrl[index];
-  }, [avatarUrl]);
+  const displayAvatar = useMemo(() => {
+    // 1. Use customer's avatar if available
+    if (customer?.avatar) return customer.avatar;
+    
+    // 2. Use first avatar from app settings if available
+    if (avatarUrl && avatarUrl.length > 0) return avatarUrl[0];
+
+    // 3. Fallback
+    return "/images/avatar/default_avt.svg";
+  }, [customer?.avatar, avatarUrl]);
 
   // Default customer khi chưa login hoặc đã logout
   const defaultCustomer = {
@@ -408,7 +413,7 @@ const MenuScreen = () => {
                 className="relative hover:scale-105 transition-transform cursor-pointer"
               >
                 <img
-                  src={randomAvatar}
+                  src={displayAvatar}
                   alt="Avatar"
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm hover:border-orange-400 transition-colors"
                 />
@@ -662,7 +667,7 @@ const MenuScreen = () => {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         customer={displayCustomer}
-        currentAvatar={randomAvatar}
+        currentAvatar={displayAvatar}
       />
     </motion.div>
   );

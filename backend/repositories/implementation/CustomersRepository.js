@@ -42,6 +42,8 @@ export class CustomerRepository extends BaseRepository {
     if (updates.password !== undefined) cleanUpdates.password = updates.password;
     if (updates.isActive !== undefined) cleanUpdates.is_active = updates.isActive;
     if (updates.loyaltyPoints !== undefined) cleanUpdates.loyalty_points = updates.loyaltyPoints;
+    if (updates.avatar !== undefined) cleanUpdates.avatar = updates.avatar;
+    if (updates.googleId !== undefined) cleanUpdates.google_id = updates.googleId;
     
     const { data, error } = await supabase
       .from(this.tableName)
@@ -88,6 +90,18 @@ export class CustomerRepository extends BaseRepository {
       .eq('email', email);
 
     if (error) throw new Error(`FindByEmail failed: ${error.message}`);
+    return data.map(item => new Customers(item)) || [];
+  }
+
+  async findByGoogleId(tenantId, googleId) {
+    if (!tenantId) throw new Error("TenantID is required for search");
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq('tenant_id', tenantId)
+      .eq('google_id', googleId);
+
+    if (error) throw new Error(`FindByGoogleId failed: ${error.message}`);
     return data.map(item => new Customers(item)) || [];
   }
 

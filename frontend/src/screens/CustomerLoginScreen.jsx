@@ -43,7 +43,32 @@ const CustomerLoginScreen = () => {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
 
+      // Check if dev mode is enabled
+      const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
 
+      if (isDevMode) {
+        console.log("🚀 DEV MODE: Bypassing QR token verification");
+        setTokenVerified(true);
+        
+        // Set mock table info for development
+        const mockTableInfo = {
+          tableId: "dev-table-001",
+          tableNumber: "Bàn DEV #1",
+        };
+        
+        setTableInfo(mockTableInfo);
+        updateTable({
+          id: mockTableInfo.tableId,
+          number: mockTableInfo.tableNumber,
+        });
+
+        // Use default tenant ID from env
+        if (import.meta.env.VITE_TENANT_ID) {
+          localStorage.setItem("tenantId", import.meta.env.VITE_TENANT_ID);
+        }
+        
+        return;
+      }
 
       if (!token) {
         showWarning("Vui lòng quét mã QR để truy cập!");

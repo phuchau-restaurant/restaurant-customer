@@ -699,5 +699,87 @@ class OrdersService {
 
     return orders;
   }
+
+  /**
+   * Get all orders by customer ID with full details
+   * @param {string} customerId - Customer ID
+   * @param {string} tenantId - Tenant ID
+   * @returns {Promise<Array>} Array of orders with details
+   */
+  async getOrdersByCustomerId(customerId, tenantId) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    // Get all orders for this customer
+    const orders = await this.ordersRepo.getByCustomerId(customerId, tenantId);
+
+    if (!orders || orders.length === 0) {
+      return [];
+    }
+
+    // Enrich orders with full details
+    const enrichedOrders = await Promise.all(
+      orders.map(async (order) => {
+        // Get order details (items)
+        const details = await this.orderDetailsRepo.getByOrderId(order.id);
+
+        // Get dish info
+        const dishIds = details.map((d) => d.dishId);
+        const dishesInfo = await this.menusRepo.getByIds(dishIds);
+
+        // Get modifiers
+        const detailIds = details.map((d) => d.id);
+        const allModifiers = await this.orderItemModifiersRepo.getByOrderDetailIds(detailIds);
+
+        // Fetch modifier prices
+        const modifierOptionIds = allModifiers.map(m => m.modifierOptionId);
+        let modifierOptionsDetails = [];
+        if (modifierOptionIds.length > 0) {
+          modifierOptionsDetails = await Promise.all(
+            modifierOptionIds.map(id => this.modifierOptionsRepo.getById(id))
+          );
+        }
+
+        // Enrich details with dish names and modifiers
+        const enrichedDetails = details.map((detail) => {
+          const dishInfo = dishesInfo.find((d) => d.id === detail.dishId);
+          const itemModifiers = allModifiers
+            .filter((mod) => mod.orderDetailId === detail.id)
+            .map((mod) => {
+              const fullOption = modifierOptionsDetails.find(opt => opt && opt.id === mod.modifierOptionId);
+              return {
+                ...mod.toResponse(),
+                price: fullOption ? fullOption.price : 0
+              };
+            });
+
+          return {
+            ...detail,
+            dishName: dishInfo?.name || "Unknown Dish",
+            dishImage: dishInfo?.imgUrl || null,
+            dishPrice: dishInfo?.price || 0,
+            modifiers: itemModifiers,
+          };
+        });
+
+        // Get table info
+        let tableNumber = order.tableId;
+        if (order.tableId && this.tablesRepo) {
+          const tableInfo = await this.tablesRepo.getById(order.tableId);
+          if (tableInfo) {
+            tableNumber = tableInfo.tableNumber;
+          }
+        }
+
+        return {
+          ...order,
+          tableNumber,
+          items: enrichedDetails,
+        };
+      })
+    );
+
+    return enrichedOrders;
+  }
 }
 export default OrdersService;

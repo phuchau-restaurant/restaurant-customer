@@ -215,6 +215,46 @@ class OrdersController {
     }
   }
 
+  /**
+   * [GET] /api/orders/customer/:customerId
+   * Get all orders for a specific customer
+   */
+  getByCustomerId = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { customerId } = req.params;
+
+      const orders = await this.ordersService.getOrdersByCustomerId(customerId, tenantId);
+
+      // Clean response - remove sensitive fields
+      const cleanedOrders = orders.map(order => {
+        const { id: _oid, tenantId: _tid, customerId: _cid, ...orderData } = order;
+        
+        // Clean items
+        const cleanedItems = orderData.items?.map(item => {
+          const { id: _iid, tenantId: _itid, orderId: _oid, ...itemData } = item;
+          return itemData;
+        }) || [];
+
+        return {
+          orderId: order.id, // Keep orderId for reference
+          ...orderData,
+          items: cleanedItems
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Customer orders fetched successfully",
+        total: cleanedOrders.length,
+        data: cleanedOrders
+      });
+    } catch (error) {
+      if (error.message.includes("not found")) error.statusCode = 404;
+      next(error);
+    }
+  }
+
 }
 
 

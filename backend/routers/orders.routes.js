@@ -9,6 +9,7 @@ router.use(tenantMiddleware);
 
 router.get('/', ordersController.getAll);
 router.post('/', ordersController.create);
+router.get('/customer/:customerId', ordersController.getByCustomerId); // Get orders by customer ID
 router.get('/:id', ordersController.getById);
 router.put('/:id', ordersController.update);
 router.delete('/:id', ordersController.delete);

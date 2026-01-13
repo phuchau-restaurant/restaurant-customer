@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Clock,
@@ -9,50 +9,47 @@ import {
   ChevronUp,
   Calendar,
   DollarSign,
+  Package,
+  AlertCircle,
 } from 'lucide-react';
+import { getOrdersByCustomerId } from '../../services/orderService';
 
 const OrderHistory = ({ customer }) => {
-  // Mock data - will be replaced with API call
-  const [orders] = useState([
-    {
-      id: 1,
-      orderNumber: 'ORD-2024-001',
-      date: '2024-01-13 14:30',
-      status: 'completed',
-      total: 350000,
-      items: [
-        { name: 'Phở bò đặc biệt', quantity: 2, price: 150000 },
-        { name: 'Trà đá', quantity: 2, price: 10000 },
-        { name: 'Gỏi cuốn', quantity: 1, price: 40000 },
-      ],
-    },
-    {
-      id: 2,
-      orderNumber: 'ORD-2024-002',
-      date: '2024-01-12 18:15',
-      status: 'cancelled',
-      total: 200000,
-      items: [
-        { name: 'Cơm tấm sườn', quantity: 1, price: 60000 },
-        { name: 'Nước chanh', quantity: 1, price: 15000 },
-      ],
-    },
-    {
-      id: 3,
-      orderNumber: 'ORD-2024-003',
-      date: '2024-01-11 12:00',
-      status: 'processing',
-      total: 450000,
-      items: [
-        { name: 'Lẩu thái', quantity: 1, price: 380000 },
-        { name: 'Nước ngọt', quantity: 2, price: 30000 },
-      ],
-    },
-  ]);
-
+  const [orders, setOrders] = useState([]);
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch orders when component mounts or customer changes
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!customer?.customerId && !customer?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const customerId = customer.customerId || customer.id;
+        const data = await getOrdersByCustomerId(customerId);
+        setOrders(data);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+        setError('Không thể tải lịch sử đơn hàng. Vui lòng thử lại.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [customer]);
 
   const getStatusConfig = (status) => {
+    // Map backend status to display config
+    const statusLower = status?.toLowerCase() || '';
+    
     const configs = {
       completed: {
         label: 'Hoàn thành',
@@ -61,12 +58,33 @@ const OrderHistory = ({ customer }) => {
         bg: 'bg-green-50',
         border: 'border-green-200',
       },
-      processing: {
+      served: {
+        label: 'Đã phục vụ',
+        icon: CheckCircle,
+        color: 'text-green-600',
+        bg: 'bg-green-50',
+        border: 'border-green-200',
+      },
+      approved: {
+        label: 'Đã duyệt',
+        icon: CheckCircle,
+        color: 'text-blue-600',
+        bg: 'bg-blue-50',
+        border: 'border-blue-200',
+      },
+      pending: {
         label: 'Đang xử lý',
         icon: Loader,
         color: 'text-blue-600',
         bg: 'bg-blue-50',
         border: 'border-blue-200',
+      },
+      unsubmit: {
+        label: 'Chưa gửi',
+        icon: Clock,
+        color: 'text-gray-600',
+        bg: 'bg-gray-50',
+        border: 'border-gray-200',
       },
       cancelled: {
         label: 'Đã hủy',
@@ -76,7 +94,7 @@ const OrderHistory = ({ customer }) => {
         border: 'border-red-200',
       },
     };
-    return configs[status] || configs.processing;
+    return configs[statusLower] || configs.pending;
   };
 
   const formatCurrency = (amount) => {
@@ -86,22 +104,60 @@ const OrderHistory = ({ customer }) => {
     }).format(amount);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
+        <p className="text-gray-500">Đang tải lịch sử đơn hàng...</p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <p className="text-red-600 text-center">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {orders.length === 0 ? (
         <div className="text-center py-12">
-          <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">Chưa có đơn hàng nào</p>
         </div>
       ) : (
         orders.map((order, index) => {
           const statusConfig = getStatusConfig(order.status);
           const StatusIcon = statusConfig.icon;
-          const isExpanded = expandedOrder === order.id;
+          const isExpanded = expandedOrder === order.orderId;
 
           return (
             <motion.div
-              key={order.id}
+              key={order.orderId}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
@@ -115,11 +171,18 @@ const OrderHistory = ({ customer }) => {
                       <StatusIcon className={`w-5 h-5 ${statusConfig.color}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800">{order.orderNumber}</p>
+                      <p className="font-semibold text-gray-800">
+                        {order.displayOrder || `#${order.orderId}`}
+                      </p>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                         <Calendar className="w-4 h-4" />
-                        {order.date}
+                        {formatDate(order.createdAt)}
                       </div>
+                      {order.tableNumber && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {order.tableNumber}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <span
@@ -132,10 +195,10 @@ const OrderHistory = ({ customer }) => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-700">
                     <DollarSign className="w-5 h-5 text-orange-500" />
-                    <span className="font-bold text-lg">{formatCurrency(order.total)}</span>
+                    <span className="font-bold text-lg">{formatCurrency(order.totalAmount)}</span>
                   </div>
                   <button
-                    onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                    onClick={() => setExpandedOrder(isExpanded ? null : order.orderId)}
                     className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-medium text-sm"
                   >
                     Chi tiết
@@ -158,18 +221,47 @@ const OrderHistory = ({ customer }) => {
                 >
                   <div className="p-4 space-y-3">
                     <h5 className="font-semibold text-gray-800 mb-2">Món đã đặt:</h5>
-                    {order.items.map((item, idx) => (
+                    {order.items?.map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between py-2 border-b border-gray-200 last:border-0"
+                        className="py-2 border-b border-gray-200 last:border-0"
                       >
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-700">{item.name}</p>
-                          <p className="text-sm text-gray-500">x{item.quantity}</p>
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-700">{item.dishName}</p>
+                            <p className="text-sm text-gray-500">Số lượng: {item.quantity}</p>
+                            {item.note && (
+                              <p className="text-xs text-gray-400 italic mt-1">
+                                Ghi chú: {item.note}
+                              </p>
+                            )}
+                          </div>
+                          <p className="font-semibold text-gray-800">
+                            {formatCurrency(item.unitPrice * item.quantity)}
+                          </p>
                         </div>
-                        <p className="font-semibold text-gray-800">
-                          {formatCurrency(item.price)}
-                        </p>
+                        
+                        {/* Display Modifiers */}
+                        {item.modifiers && item.modifiers.length > 0 && (
+                          <div className="ml-4 mt-2 space-y-1">
+                            {item.modifiers.map((modifier, modIdx) => (
+                              <div
+                                key={modIdx}
+                                className="flex items-center justify-between text-xs text-gray-600"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                  {modifier.optionName}
+                                </span>
+                                {modifier.price > 0 && (
+                                  <span className="text-orange-600">
+                                    +{formatCurrency(modifier.price)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

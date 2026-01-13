@@ -55,4 +55,29 @@ export class OrdersRepository extends BaseRepository {
     const rawData = await super.delete(id);
     return rawData ? new Orders(rawData) : null;
   }
+
+  /**
+   * Get all orders by customer ID
+   * @param {number} customerId - Customer ID
+   * @param {string} tenantId - Tenant ID for security check
+   * @returns {Promise<Array<Orders>>} Array of Orders
+   */
+  async getByCustomerId(customerId, tenantId) {
+    let query = supabase
+      .from(this.tableName)
+      .select("*")
+      .eq('customer_id', customerId);
+    
+    // Add tenant filter for security
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    
+    // Order by newest first
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw new Error(`[Orders] GetByCustomerId failed: ${error.message}`);
+    return data.map(item => new Orders(item));
+  }
 }

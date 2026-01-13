@@ -6,11 +6,27 @@ const ProfileInfo = ({ customer, currentAvatar }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   
-  const [formData, setFormData] = useState({
-    name: customer?.name || '',
-    email: customer?.email || '',
-    phone: customer?.phone || '',
+  // Safe data extraction handling different field names
+  const getCustomerData = (data) => ({
+    name: data?.name || data?.fullName || data?.full_name || '',
+    email: data?.email || '',
+    phone: data?.phone || data?.phoneNumber || data?.phone_number || '',
   });
+
+  const [formData, setFormData] = useState(getCustomerData(customer));
+
+  // Sync state when customer prop changes
+  React.useEffect(() => {
+    if (customer) {
+      setFormData(getCustomerData(customer));
+      // Update avatar if not already set by user interaction
+      if (!customer.avatar && currentAvatar) {
+        setAvatarPreview(currentAvatar);
+      } else if (customer.avatar) {
+        setAvatarPreview(customer.avatar);
+      }
+    }
+  }, [customer, currentAvatar]);
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',

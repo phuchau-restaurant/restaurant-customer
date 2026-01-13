@@ -31,7 +31,7 @@ class MenuItemModifierGroupService {
         name: group.name,
         description: group.description,
         minSelections: group.min_selections,
-        maxSelection: group.max_selection,
+        maxSelections: group.max_selections,
         isRequired: group.is_required,
         isActive: group.is_active,
         options: (group.modifier_options || []).map((opt) => ({

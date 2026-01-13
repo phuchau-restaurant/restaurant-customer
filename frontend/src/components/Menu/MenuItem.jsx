@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Plus, Images, Check, ChevronDown, AlertCircle } from "lucide-react";
+import { Plus, Images, Check, ChevronDown, AlertCircle, Star } from "lucide-react";
 
-const MenuItem = ({ product, onAdd, onImageClick }) => {
+const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
   const [validationMessage, setValidationMessage] = useState("");
@@ -196,6 +196,39 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
         )}
       </div>
       <div className="flex-1 flex flex-col">
+        {/* Rating Section - Vibrant Yellow Design - Clickable */}
+        <div 
+          className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80 transition-opacity w-fit"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (product.rating && product.rating.totalReviews > 0) {
+              onShowReviews?.(product);
+            }
+          }}
+        >
+          {product.rating && product.rating.totalReviews > 0 ? (
+            <>
+              <div className="flex items-center gap-1 bg-gradient-to-r from-yellow-50 to-orange-50 px-2 py-1 rounded-lg border border-yellow-200">
+                <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                <span className="text-sm font-bold text-yellow-700">
+                  {parseFloat(product.rating.averageRating).toFixed(1)}
+                </span>
+              </div>
+              <span className="text-xs text-gray-600 font-medium underline decoration-dotted">
+                ({product.rating.totalReviews} đánh giá)
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-200">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="text-sm font-bold text-yellow-600">0.0</span>
+              </div>
+              <span className="text-xs text-yellow-600 font-medium">(Chưa có đánh giá)</span>
+            </>
+          )}
+        </div>
+        
         <div className="flex-1 min-w-0 mb-3">
           <h3 className="font-bold text-gray-800 text-2xl mb-1 font-oswald">
             {product.name}

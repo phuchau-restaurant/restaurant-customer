@@ -20,6 +20,7 @@ import Pagination from "../components/Pagination/Pagination";
 import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 import ProfileSidebar from "../components/Profile/ProfileSidebar";
+import DishReviewsModal from "../components/Menu/DishReviewsModal";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -38,6 +39,7 @@ const MenuScreen = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [selectedDishForReviews, setSelectedDishForReviews] = useState(null);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
@@ -586,6 +588,12 @@ const MenuScreen = () => {
                   product={product}
                   onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
                   onImageClick={(product) => setGalleryProduct(product)}
+                  onShowReviews={(product) => setSelectedDishForReviews({
+                    id: product.id,
+                    name: product.name,
+                    image: product.photos?.find((p) => p.isPrimary)?.url || product.imgUrl,
+                    rating: product.rating
+                  })}
                 />
               </motion.div>
             ))
@@ -704,6 +712,13 @@ const MenuScreen = () => {
         onClose={() => setIsProfileOpen(false)}
         customer={displayCustomer}
         currentAvatar={displayAvatar}
+      />
+      
+      {/* Dish Reviews Modal - Full Screen */}
+      <DishReviewsModal
+        isOpen={!!selectedDishForReviews}
+        onClose={() => setSelectedDishForReviews(null)}
+        dish={selectedDishForReviews}
       />
     </motion.div>
   );

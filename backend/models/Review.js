@@ -13,6 +13,10 @@ export class Review {
     // Map joined menu data
     this.dishName = data.menus?.name || data.dishName;
     this.dishImage = data.menus?.image || data.dishImage;
+    
+    // Map joined customer data
+    this.customerName = data.customers?.full_name || data.customerName;
+    this.customerAvatar = data.customers?.avatar || data.customerAvatar;
   }
 
   toPersistence() {
@@ -39,6 +43,8 @@ export class Review {
       createdAt: this.createdAt,
       dishName: this.dishName,
       dishImage: this.dishImage,
+      customerName: this.customerName,
+      customerAvatar: this.customerAvatar,
     };
   }
 }

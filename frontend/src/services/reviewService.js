@@ -33,6 +33,29 @@ export const getReviewsByCustomer = async (customerId) => {
 };
 
 /**
+ * Get all reviews for a specific dish
+ * GET /api/reviews/dish/:dishId
+ */
+export const getReviewsByDish = async (dishId) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/api/reviews/dish/${dishId}`,
+      { headers: getHeaders() }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.success ? result.data : [];
+  } catch (error) {
+    console.error('Fetch dish reviews error:', error);
+    return [];
+  }
+};
+
+/**
  * Create a new review
  * POST /api/reviews
  */
@@ -155,4 +178,5 @@ export default {
   updateReview,
   deleteReview,
   canReviewDish,
+  getReviewsByDish,
 };

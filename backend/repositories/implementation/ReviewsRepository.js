@@ -52,14 +52,42 @@ export class ReviewsRepository extends BaseRepository {
    * Get all reviews for a specific dish
    */
   async getByDishId(dishId) {
-    const { data, error } = await supabase
+    // 1. Get reviews
+    const { data: reviews, error } = await supabase
       .from(this.tableName)
       .select("*")
       .eq("dish_id", dishId)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(`[Reviews] GetByDishId failed: ${error.message}`);
-    return data.map(item => new Review(item));
+    
+    if (!reviews || reviews.length === 0) return [];
+
+    // 2. Get customer details manually
+    const customerIds = [...new Set(reviews.map(r => r.customer_id))];
+    const { data: customers, error: customersError } = await supabase
+      .from("customers")
+      .select("id, full_name, avatar")
+      .in("id", customerIds);
+
+    if (customersError) {
+      console.error("Error fetching customers for reviews:", customersError);
+      return reviews.map(item => new Review(item));
+    }
+
+    // 3. Map customer details to reviews
+    const customerMap = {};
+    customers?.forEach(c => customerMap[c.id] = c);
+
+    return reviews.map(item => {
+      const customer = customerMap[item.customer_id];
+      const reviewWithCustomer = { 
+        ...item, 
+        customerName: customer?.full_name || `Khách hàng #${item.customer_id}`, 
+        customerAvatar: customer?.avatar 
+      };
+      return new Review(reviewWithCustomer);
+    });
   }
 
   /**

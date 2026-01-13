@@ -36,43 +36,72 @@ const CustomerLoginScreen = () => {
   const [isExiting, setIsExiting] = useState(false);
   const [qrToken, setQrToken] = useState(null);
 
-  // Kiểm tra QR token trong URL
+  // Kiểm tra và xác thực QR token với server
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
+    const verifyToken = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
 
-    if (!token) {
-      showWarning("Vui lòng quét mã QR để truy cập!");
-      setTimeout(() => navigate("/"), 2000);
-      return;
-    }
 
-    // Nếu có token, lưu lại và cho phép đăng nhập
-    setQrToken(token);
-    setTokenVerified(true);
 
-    // Decode JWT để lấy thông tin bàn (không cần verify server vì JWT đã mã hóa)
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      setTableInfo({
-        tableId: payload.tableId,
-        tableNumber: `Bàn ${payload.tableId}`,
-      });
-      updateTable({
-        id: payload.tableId,
-        number: `Bàn ${payload.tableId}`,
-      });
-
-      // Lưu tenantId vào localStorage
-      if (payload.tenantId) {
-        localStorage.setItem("tenantId", payload.tenantId);
+      if (!token) {
+        showWarning("Vui lòng quét mã QR để truy cập!");
+        setTokenVerified(false);
+        return;
       }
-    } catch (err) {
-      console.error("Failed to decode token:", err);
-      setTableInfo({ tableNumber: "Không xác định" });
-    }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      try {
+
+        // Call API to verify token
+        const response = await fetch(
+          `${import.meta.env.VITE_BACKEND_URL}/api/tokens/verify-qr`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ token }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          // Token invalid or expired
+          showError(
+            data.message || "QR code không hợp lệ. Vui lòng quét mã QR mới từ nhà hàng."
+          );
+          setTokenVerified(false);
+          return;
+        }
+
+        // Token is valid
+        setQrToken(token);
+        setTokenVerified(true);
+
+        // Set table info from verified token
+        setTableInfo({
+          tableId: data.data.tableId,
+          tableNumber: data.data.tableNumber,
+        });
+        
+        updateTable({
+          id: data.data.tableId,
+          number: data.data.tableNumber,
+        });
+
+        // Save tenantId to localStorage
+        if (data.data.tenantId) {
+          localStorage.setItem("tenantId", data.data.tenantId);
+        }
+      } catch (error) {
+        console.error("Token verification error:", error);
+        showError("Không thể xác thực QR code. Vui lòng thử lại.");
+        setTokenVerified(false);
+      }
+    };
+
+    verifyToken();
   }, []);
 
   const validateIdentifier = (value) => {
@@ -151,26 +180,55 @@ const CustomerLoginScreen = () => {
   if (!tokenVerified) {
     return (
       <>
-        <div className="min-h-screen bg-orange-50 flex items-center justify-center">
-          <div className="text-orange-600 text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
-            <p className="text-xl font-semibold">Đang xác thực QR code...</p>
-            {tableInfo && (
-              <p className="text-sm mt-2 text-gray-600">
-                Bàn: {tableInfo.tableNumber}
-              </p>
+        <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            {alert.isOpen && alert.type === "error" ? (
+              // Error State - Invalid Token
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-white rounded-3xl shadow-2xl p-8"
+              >
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 0.5 }}
+                  className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"
+                >
+                  <span className="text-4xl">⚠️</span>
+                </motion.div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                  {alert.title}
+                </h2>
+                <p className="text-gray-600 mb-6">{alert.message}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 px-6 rounded-xl font-semibold hover:shadow-lg transition-all"
+                >
+                  Quét lại mã QR
+                </button>
+              </motion.div>
+            ) : (
+              // Loading State - Verifying Token
+              <>
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
+                <p className="text-xl font-semibold text-orange-600 mb-2">
+                  Đang xác thực QR code...
+                </p>
+                {tableInfo && (
+                  <p className="text-sm text-gray-600">
+                    {tableInfo.tableNumber}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Alert Modal - Hiển thị lỗi khi verify */}
+        {/* Alert Modal */}
         <AlertModal
           isOpen={alert.isOpen}
           onClose={() => {
             closeAlert();
-            if (alert.type === "error") {
-              window.location.href = "/";
-            }
           }}
           title={alert.title}
           message={alert.message}

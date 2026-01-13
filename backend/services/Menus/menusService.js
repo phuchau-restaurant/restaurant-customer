@@ -7,8 +7,13 @@ class MenusService {
   /**
    * Lấy danh sách Menu theo Tenant
    * Có thể lọc theo CategoryId nếu cần
+   * @param {string} tenantId - Tenant ID
+   * @param {string} categoryId - Category ID (optional)
+   * @param {boolean} onlyAvailable - Filter only available items
+   * @param {number} pageNumber - Page number (1-indexed)
+   * @param {number} pageSize - Items per page
    */
-  async getMenusByTenant(tenantId, categoryId = null, onlyAvailable = false) {
+  async getMenusByTenant(tenantId, categoryId = null, onlyAvailable = false, pageNumber = null, pageSize = null) {
     if (!tenantId) throw new Error("Missing tenantId");
 
     const filters = { tenant_id: tenantId };
@@ -22,7 +27,7 @@ class MenusService {
       filters.is_available = true;
     }
 
-    return await this.menusRepo.getAll(filters);
+    return await this.menusRepo.getAll(filters, pageNumber, pageSize);
   }
 
   async getMenuById(id, tenantId) {

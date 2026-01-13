@@ -16,6 +16,7 @@ import appSettingsRoutes from "./routers/appSettings.routes.js";
 import modifiersRoutes from "./routers/modifiers.routes.js";
 import menuItemModifierGroupRoutes from "./routers/menuItemModifierGroup.routes.js";
 import menuItemPhotoRoutes from "./routers/menuItemPhoto.routes.js";
+import tokensRoutes from "./routers/tokens.routes.js";
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -37,12 +38,14 @@ app.use(requestLogger);
 
 // --- ROUTES ---
 // API dành cho khách hàng
+// IMPORTANT: More specific routes MUST come before broad routes
+app.use("/api/tokens", tokensRoutes); // Must be before "/api" route
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/menus", menusRoutes);
 app.use("/api/customers", customersRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/appsettings", appSettingsRoutes);
-app.use("/api", modifiersRoutes);
+app.use("/api", modifiersRoutes); // This catches all /api/* routes
 app.use("/api/menu-item-modifier-group", menuItemModifierGroupRoutes);
 app.use("/api/items", menuItemPhotoRoutes);
 // Route kiểm tra server sống hay chết

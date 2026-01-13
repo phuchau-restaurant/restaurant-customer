@@ -15,6 +15,8 @@ import {
   fetchAvatarUrls,
   submitOrder,
 } from "../services/menuService";
+import Pagination from "../components/Pagination/Pagination";
+import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -31,18 +33,25 @@ const MenuScreen = () => {
   const [isLoadingMenu, setIsLoadingMenu] = useState(false);
   const [galleryProduct, setGalleryProduct] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("default");
   const [priceFilter, setPriceFilter] = useState("all");
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMenuItems, setTotalMenuItems] = useState(0);
+
   // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
     // Kiểm tra đã login và có thông tin bàn chưa
     if (!tableInfo || !tableInfo.id) {
       showWarning("Vui lòng đăng nhập trước!");
-      setTimeout(() => navigate("/customer/login"), 2000);
+      setTimeout(() => navigate("/login"), 2000);
       return;
     }
 
@@ -75,13 +84,28 @@ const MenuScreen = () => {
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
         const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
         
-        const products = await fetchMenus({
+        // Disable pagination when searching/filtering (client-side filtering)
+        const hasClientFilter = searchQuery || sortBy !== "default" || priceFilter !== "all";
+        
+        const result = await fetchMenus({
           categoryId,
           categories,
           activeCategory,
+          pageNumber: hasClientFilter ? null : currentPage,
+          pageSize: hasClientFilter ? null : pageSize,
         });
         
-        setProducts(products);
+        // Handle paginated response
+        if (result && typeof result === 'object' && 'products' in result) {
+          setProducts(result.products);
+          setTotalPages(result.totalPages || 1);
+          setTotalMenuItems(result.total || 0);
+        } else {
+          // Backward compatibility: if result is just an array
+          setProducts(result);
+          setTotalPages(1);
+          setTotalMenuItems(result.length);
+        }
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
       } finally {
@@ -93,7 +117,7 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories, isInitialLoad]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter]);
 
   // Filter and Sort Logic
   const filteredAndSortedProducts = useMemo(() => {
@@ -133,6 +157,22 @@ const MenuScreen = () => {
     return result;
   }, [products, searchQuery, sortBy, priceFilter]);
 
+  // Pagination Handlers
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  // Reset to page 1 when changing category
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory]);
+
   // Submit order handler
   const handleSubmitOrder = async () => {
     try {
@@ -153,7 +193,10 @@ const MenuScreen = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/customer/login", { replace: true });
+    // Small delay to ensure smooth transition
+    setTimeout(() => {
+      navigate("/goodbye", { replace: true });
+    }, 100);
   };
 
   const randomAvatar = useMemo(() => {
@@ -161,6 +204,12 @@ const MenuScreen = () => {
     const index = Math.floor(Math.random() * avatarUrl.length);
     return avatarUrl[index];
   }, [avatarUrl]);
+
+  // Default customer khi chưa login hoặc đã logout
+  const defaultCustomer = {
+    name: "Khách hàng",
+    loyaltyPoints: 0,
+  };
 
   // hiển thị customer từ context hoặc default
   const displayCustomer = customer || defaultCustomer;
@@ -256,12 +305,31 @@ const MenuScreen = () => {
         />
       )}
 
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity duration-300"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Hidden on mobile, slide in when open */}
       <motion.div
-        className="w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-sm z-10"
+        className={`fixed lg:relative w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-lg lg:shadow-sm z-40 h-full transition-transform duration-300 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
+        {/* Close button for mobile */}
+        <button
+          onClick={() => setIsSidebarOpen(false)}
+          className="absolute top-4 right-4 lg:hidden text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X size={20} />
+        </button>
+
         <motion.img
           layoutId="app-logo"
           src="/images/logo.png"
@@ -275,7 +343,10 @@ const MenuScreen = () => {
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.3 + index * 0.05 }}
-            onClick={() => setActiveCategory(cat.id)}
+            onClick={() => {
+              setActiveCategory(cat.id);
+              setIsSidebarOpen(false); // Close sidebar on mobile after selecting
+            }}
             className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-300 ${
               activeCategory === cat.id
                   ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105"
@@ -307,39 +378,50 @@ const MenuScreen = () => {
 
       <div className="flex-1 overflow-y-auto flex flex-col h-screen">
         <motion.header
-          className="px-6 py-4 shrink-0"
+          className="px-4 md:px-6 py-3 md:py-4 shrink-0 bg-white border-b border-gray-100"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <div className="flex justify-between items-center">
-            <div className="space-y-2">
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-5 py-3 rounded-full shadow-md text-md font-bold text-white">
-                Bàn số: {tableInfo?.number || "..."}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            {/* Left: Hamburger + Table Info */}
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* Animated Hamburger Menu Button - Only on Mobile */}
+              <AnimatedHamburger
+                isOpen={isSidebarOpen}
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden"
+              />
+              
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-4 md:px-5 py-2 md:py-3 rounded-full shadow-md text-sm md:text-md font-bold text-white">
+                Bàn: {tableInfo?.number || "..."}
               </div>
             </div>
-            <div className="flex items-center gap-3 bg-gray-50 rounded-full pl-3 pr-2 py-2 border border-gray-200">
+
+            {/* Right: Customer Info */}
+            <div className="flex items-center gap-2 md:gap-3 bg-gray-50 rounded-full pl-2 md:pl-3 pr-2 py-2 border border-gray-200 w-full sm:w-auto">
               <div className="relative">
                 <img
                   src={randomAvatar}
-                  alt="Avatar khách hàng"
-                  className="w-10 h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm"
+                  alt="Avatar"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm"
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">
+                <p className="text-xs md:text-sm font-semibold text-gray-800 truncate">
                   {displayCustomer.name}
                 </p>
-                <p className="text-xs text-amber-600 font-bold">
+                <p className="text-[10px] md:text-xs text-amber-600 font-bold">
                   Loyalty: {displayCustomer.loyaltyPoints} điểm
                 </p>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1 bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm"
+                className="flex items-center gap-1 bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors px-2 md:px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm"
               >
-                <LogOut size={14} />
-                Logout
+                <LogOut size={12} className="md:hidden" />
+                <LogOut size={14} className="hidden md:block" />
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </div>
@@ -347,7 +429,7 @@ const MenuScreen = () => {
 
         {/* Search, Filter, Sort Toolbar */}
         <motion.div
-          className="px-6 py-2 shrink-0 z-20"
+          className="px-4 md:px-6 py-2 shrink-0 z-20"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
@@ -409,7 +491,7 @@ const MenuScreen = () => {
         </motion.div>
 
         <motion.div
-          className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
+          className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
@@ -462,6 +544,23 @@ const MenuScreen = () => {
             ))
           )}
         </motion.div>
+
+        {/* Pagination Component - Only show when not searching/filtering */}
+        {!isLoadingMenu && 
+         filteredAndSortedProducts.length > 0 && 
+         !searchQuery && 
+         sortBy === "default" && 
+         priceFilter === "all" && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={totalMenuItems}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            pageSizeOptions={[12, 24, 36, 48]}
+          />
+        )}
       </div>
 
       {!isCartOpen && totalItems > 0 && (
@@ -471,17 +570,18 @@ const MenuScreen = () => {
           exit={{ scale: 0, opacity: 0 }}
           transition={{ duration: 0.3 }}
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-8 right-8 bg-linear-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-2xl shadow-orange-400/50 hover:shadow-orange-500/60 hover:scale-105 transition-all duration-300 z-40 flex items-center gap-3 px-6 py-4"
+          className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-linear-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-2xl shadow-orange-400/50 hover:shadow-orange-500/60 hover:scale-105 transition-all duration-300 z-40 flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4"
         >
           <div className="relative">
-            <ShoppingCart size={28} />
+            <ShoppingCart size={24} className="md:hidden" />
+            <ShoppingCart size={28} className="hidden md:block" />
             <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
               {totalItems}
             </span>
           </div>
           <div className="flex flex-col items-start">
-            <span className="text-xs opacity-90">Tổng cộng</span>
-            <span className="font-bold text-lg">
+            <span className="text-[10px] md:text-xs opacity-90">Tổng cộng</span>
+            <span className="font-bold text-base md:text-lg">
               {totalAmount.toLocaleString("vi-VN")}₫
             </span>
           </div>

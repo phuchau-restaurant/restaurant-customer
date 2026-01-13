@@ -160,23 +160,23 @@ const CustomerForgotPasswordScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="sm:mx-auto sm:w-full sm:max-w-md"
+        className="sm:mx-auto sm:w-full sm:max-w-md w-full"
       >
-        <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-gray-100 relative overflow-hidden">
+        <div className="bg-white py-8 px-4 shadow-xl rounded-xl sm:rounded-2xl sm:px-10 border border-gray-100 relative overflow-hidden">
           {/* Decorative Header */}
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-400 to-red-500" />
           
-          <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900">
+          <div className="mb-6 sm:mb-8 text-center">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
               {step === 1 && "Quên mật khẩu?"}
               {step === 2 && "Nhập mã xác thực"}
               {step === 3 && "Tạo mật khẩu mới"}
             </h2>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">
               {step === 1 && "Nhập email để nhận mã OTP khôi phục mật khẩu"}
               {step === 2 && `Mã OTP đã được gửi đến ${email}`}
               {step === 3 && "Nhập mật khẩu mới cho tài khoản của bạn"}
@@ -202,7 +202,7 @@ const CustomerForgotPasswordScreen = () => {
                     <input
                       type="email"
                       required
-                      className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm transition-all"
+                      className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 text-base sm:text-sm transition-all"
                       placeholder="vidu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -219,13 +219,14 @@ const CustomerForgotPasswordScreen = () => {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                  >
-                    <div className="flex justify-between gap-2 mb-4">
+                    <div className="flex justify-between gap-1 sm:gap-2 mb-4">
                       {otp.map((data, index) => (
                         <input
                           key={index}
                           type="text"
                           maxLength="1"
-                          className="w-12 h-14 border-2 border-gray-200 rounded-xl text-center text-xl font-bold focus:border-orange-500 focus:ring-4 focus:ring-orange-100 outline-none transition-all"
+                          inputMode="numeric"
+                          className="w-10 h-12 sm:w-12 sm:h-14 border-2 border-gray-200 rounded-lg sm:rounded-xl text-center text-lg sm:text-xl font-bold focus:border-orange-500 focus:ring-2 sm:focus:ring-4 focus:ring-orange-100 outline-none transition-all p-0"
                           value={data}
                           onChange={(e) => handleOtpChange(e.target, index)}
                           onFocus={(e) => e.target.select()}
@@ -262,7 +263,7 @@ const CustomerForgotPasswordScreen = () => {
                         <input
                             type="password"
                             required
-                            className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                            className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 text-base sm:text-sm"
                             placeholder="Mật khẩu mới"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
@@ -278,7 +279,7 @@ const CustomerForgotPasswordScreen = () => {
                         <input
                             type="password"
                             required
-                            className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                            className="appearance-none block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 text-base sm:text-sm"
                             placeholder="Nhập lại mật khẩu"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}

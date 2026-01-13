@@ -15,6 +15,7 @@ import {
   fetchAvatarUrls,
   submitOrder,
 } from "../services/menuService";
+import { getBulkDishRatings } from "../services/ratingService";
 import Pagination from "../components/Pagination/Pagination";
 import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
@@ -100,14 +101,41 @@ const MenuScreen = () => {
         
         // Handle paginated response
         if (result && typeof result === 'object' && 'products' in result) {
-          setProducts(result.products);
+          const productsData = result.products;
+          
+          // Fetch ratings for all dishes
+          const dishIds = productsData.map(p => p.id);
+          console.log('📊 Fetching ratings for dishes:', dishIds);
+          const ratingsMap = await getBulkDishRatings(dishIds);
+          console.log('📊 Ratings received:', ratingsMap);
+          
+          // Merge ratings into products
+          const productsWithRatings = productsData.map(product => ({
+            ...product,
+            rating: ratingsMap[product.id] || { totalReviews: 0, averageRating: 0 }
+          }));
+          console.log('📊 Products with ratings:', productsWithRatings.slice(0, 2));
+          
+          setProducts(productsWithRatings);
           setTotalPages(result.totalPages || 1);
           setTotalMenuItems(result.total || 0);
         } else {
           // Backward compatibility: if result is just an array
-          setProducts(result);
+          const productsData = result;
+          
+          // Fetch ratings for all dishes
+          const dishIds = productsData.map(p => p.id);
+          const ratingsMap = await getBulkDishRatings(dishIds);
+          
+          // Merge ratings into products
+          const productsWithRatings = productsData.map(product => ({
+            ...product,
+            rating: ratingsMap[product.id] || { totalReviews: 0, averageRating: 0 }
+          }));
+          
+          setProducts(productsWithRatings);
           setTotalPages(1);
-          setTotalMenuItems(result.length);
+          setTotalMenuItems(productsData.length);
         }
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);

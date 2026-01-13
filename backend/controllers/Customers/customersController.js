@@ -116,11 +116,11 @@ class CustomersController {
         });
       }
 
-      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+      const { id, tenantId: _tid, password: _pwd, ...returnData } = customer;
       return res.status(200).json({
         message: "Login successful",
         success: true,
-        data: returnData,
+        data: { ...returnData, customerId: id },
       });
     } catch (error) {
       // Handle account not verified
@@ -181,11 +181,11 @@ class CustomersController {
         password
       });
 
-      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = newCustomer;
+      const { id, tenantId: _tid, password: _pwd, ...returnData } = newCustomer;
       return res.status(201).json({
         success: true,
         message: "Customer registered successfully",
-        data: returnData
+        data: { ...returnData, customerId: id }
       });
     } catch (error) {
       error.statusCode = 400;
@@ -224,11 +224,11 @@ class CustomersController {
       // Activate customer account
       const customer = await this.customersService.activateCustomer(email, tenantId);
 
-      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+      const { id, tenantId: _tid, password: _pwd, ...returnData } = customer;
       return res.status(200).json({
         success: true,
         message: "Xác thực thành công! Tài khoản đã được kích hoạt.",
-        data: returnData
+        data: { ...returnData, customerId: id }
       });
     } catch (error) {
       error.statusCode = 400;
@@ -442,12 +442,12 @@ class CustomersController {
 
       const customer = await this.customersService.authenticateWithGoogle(tenantId, token);
 
-      const { id: _id, tenantId: _tid, password: _pwd, ...returnData } = customer;
+      const { id, tenantId: _tid, password: _pwd, ...returnData } = customer;
 
       return res.status(200).json({
         success: true,
         message: "Google login successful",
-        data: returnData
+        data: { ...returnData, customerId: id }
       });
     } catch (error) {
        error.statusCode = 400;

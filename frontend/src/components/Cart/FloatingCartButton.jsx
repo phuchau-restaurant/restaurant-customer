@@ -10,32 +10,52 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
   const lastEmitTime = useRef(0);
   const particleIdCounter = useRef(0);
 
-  // Motion values cho vị trí của nút
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
+  // 1. Khởi tạo vị trí từ LocalStorage
+  // Dùng function để chỉ đọc localStorage 1 lần khi init
+  const initialX = () => {
+    try {
+      const saved = localStorage.getItem('cartButtonPosition');
+      return saved ? JSON.parse(saved).x : 0;
+    } catch { return 0; }
+  };
+  const initialY = () => {
+    try {
+      const saved = localStorage.getItem('cartButtonPosition');
+      return saved ? JSON.parse(saved).y : 0;
+    } catch { return 0; }
+  };
 
-  // Hiệu ứng "nghiêng" nút dựa trên vận tốc kéo (tạo cảm giác vật lý)
+  const x = useMotionValue(initialX());
+  const y = useMotionValue(initialY());
+
+  // Hiệu ứng "nghiêng" nút dựa trên vận tốc kéo
   const rotateX = useTransform(y, [-100, 100], [15, -15]);
   const rotateY = useTransform(x, [-100, 100], [-15, 15]);
 
   const handleDrag = (event, info) => {
     const now = Date.now();
-    // Giới hạn tốc độ sinh icon (mỗi 100ms tối đa 1 icon) để không bị lag
-    if (now - lastEmitTime.current > 100) {
-      // Chỉ drop icon nếu đang di chuyển đủ nhanh
+    // 2. Tăng số lượng icon: Giảm delay và speed threshold
+    if (now - lastEmitTime.current > 40) { // Mỗi 40ms (25fps)
       const speed = Math.sqrt(info.velocity.x ** 2 + info.velocity.y ** 2);
-      if (speed > 50) {
-        emitParticle(info.point.x, info.point.y);
+      if (speed > 10) { // Chỉ cần di chuyển nhẹ
+        emitParticle(info.point.x, info.point.y); // Emit 1 icon
+        
+        // Bonus: Đôi khi emit thêm icon thứ 2 cho dày
+        if (Math.random() > 0.5) {
+             setTimeout(() => emitParticle(info.point.x + (Math.random()*20-10), info.point.y + (Math.random()*20-10)), 50);
+        }
+        
         lastEmitTime.current = now;
       }
     }
   };
 
+  const handleDragEnd = () => {
+    // 3. Lưu vị trí khi thả tay
+    localStorage.setItem('cartButtonPosition', JSON.stringify({ x: x.get(), y: y.get() }));
+  };
+
   const emitParticle = (clientX, clientY) => {
-    // Lấy vị trí tương đối của nút (một cách tương đối chính xác)
-    // Lưu ý: info.point là toạ độ chuột/ngón tay
-    
-    // Chọn random icon
     const icon = FOOD_ICONS[Math.floor(Math.random() * FOOD_ICONS.length)];
     
     const newParticle = {
@@ -43,15 +63,14 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
       x: clientX,
       y: clientY,
       icon,
-      // Random độ bay của icon
-      velocityX: (Math.random() - 0.5) * 100,
-      velocityY: (Math.random() - 0.5) * 100 + 100, // Luôn rơi xuống một chút
+      velocityX: (Math.random() - 0.5) * 150, // Bay rộng hơn
+      velocityY: (Math.random() - 0.5) * 100 + 150, // Rơi nhanh hơn
       rotation: Math.random() * 360,
+      scale: Math.random() * 0.5 + 0.8, // Random kích thước
     };
 
-    setParticles(prev => [...prev.slice(-15), newParticle]); // Giữ tối đa 15 particles
+    setParticles(prev => [...prev.slice(-25), newParticle]); // Tăng giới hạn particles lên 25
 
-    // Tự động xóa particle sau 1s (cleanup)
     setTimeout(() => {
       setParticles(prev => prev.filter(p => p.id !== newParticle.id));
     }, 1000);
@@ -59,14 +78,14 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
 
   return (
     <>
-      {/* Particles Layer - Render bên ngoài nút nhưng cùng cấp z-index thấp hơn */}
+      {/* Particles Layer */}
       {particles.map((particle) => (
         <motion.div
           key={particle.id}
           initial={{ 
             opacity: 1, 
-            scale: 0.8, 
-            x: particle.x - 20, // Offset để căn giữa
+            scale: particle.scale, 
+            x: particle.x - 20, 
             y: particle.y - 20,
             rotate: particle.rotation 
           }}
@@ -79,7 +98,7 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
           }}
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="fixed pointer-events-none z-30 text-2xl"
-          style={{ left: 0, top: 0 }} // Reset position để dùng x,y transform
+          style={{ left: 0, top: 0 }}
         >
           {particle.icon}
         </motion.div>
@@ -89,9 +108,8 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
       <motion.button
         ref={buttonRef}
         drag
-        dragMomentum={true} // Cho phép quán tính tự nhiên (vứt nút đi nó trượt tiếp)
-        dragElastic={0.1} // Đàn hồi nhẹ khi kéo kịch biên
-        // Giới hạn vùng kéo trong cửa sổ (trừ đi kích thước nút)
+        dragMomentum={true}
+        dragElastic={0.1}
         dragConstraints={{ 
           left: -window.innerWidth + 80, 
           right: 0, 
@@ -99,11 +117,12 @@ const FloatingCartButton = ({ totalItems, totalAmount, onClick }) => {
           bottom: 0 
         }}
         onDrag={handleDrag}
-        style={{ x, y, rotateX, rotateY, perspective: 1000 }} // Thêm hiệu ứng 3D nghiêng lắc
+        onDragEnd={handleDragEnd} // Lưu vị trí
+        style={{ x, y, rotateX, rotateY, cursor: 'grab', touchAction: 'none' }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95, cursor: "grabbing" }}
         onClick={onClick}
-        className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-2xl shadow-2xl shadow-orange-500/40 z-40 flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4 cursor-grab touch-none"
+        className="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-2xl shadow-2xl shadow-orange-500/40 z-40 flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4"
       >
         <div className="relative">
           <motion.div

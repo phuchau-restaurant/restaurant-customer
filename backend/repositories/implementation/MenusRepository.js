@@ -80,9 +80,12 @@ async getById(id) {
    * @param {Object} filters - Filter conditions
    * @param {number} pageNumber - Page number (1-indexed)
    * @param {number} pageSize - Number of items per page
+   * @param {Object} sort - Sort configuration { column, order }
+   * @param {string} searchQuery - Search text for name/description
+   * @param {string} priceRange - Price range filter (under-50, 50-100, above-100)
    * @returns {Promise<Object>} Object with data, total, totalPages, currentPage
    */
-  async getAll(filters = {}, pageNumber = null, pageSize = null) {
+  async getAll(filters = {}, pageNumber = null, pageSize = null, sort = null, searchQuery = null, priceRange = null) {
     let query = supabase.from(this.tableName).select('*', { count: 'exact' });
 
     // Apply filters
@@ -91,6 +94,37 @@ async getById(id) {
         query = query.eq(key, value);
       }
     });
+
+    // Apply search filter (search in name and description)
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = searchQuery.trim();
+      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+    }
+
+    // Apply price range filter
+    if (priceRange) {
+      switch (priceRange) {
+        case 'under-50':
+          query = query.lt('price', 50000);
+          break;
+        case '50-100':
+          query = query.gte('price', 50000).lte('price', 100000);
+          break;
+        case 'above-100':
+          query = query.gt('price', 100000);
+          break;
+      }
+    }
+
+    // Apply sorting
+    if (sort) {
+       // sort format: { column: 'price', order: 'asc' }
+       // Ensure nulls always appear last (e.g. for popularity sort DESC)
+       query = query.order(sort.column, { ascending: sort.order === 'asc', nullsFirst: false });
+    } else {
+       // Default sort (optional) - e.g. by name
+       query = query.order('name', { ascending: true });
+    }
 
     // Get total count first
     const { count: totalCount } = await query;

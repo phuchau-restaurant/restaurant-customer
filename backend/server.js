@@ -17,6 +17,9 @@ import modifiersRoutes from "./routers/modifiers.routes.js";
 import menuItemModifierGroupRoutes from "./routers/menuItemModifierGroup.routes.js";
 import menuItemPhotoRoutes from "./routers/menuItemPhoto.routes.js";
 import tokensRoutes from "./routers/tokens.routes.js";
+import uploadRoutes from "./routers/upload.routes.js";
+import reviewsRoutes from "./routers/reviews.routes.js";
+import dishRatingsRoutes from "./routers/dishRatings.routes.js";
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -45,6 +48,9 @@ app.use("/api/menus", menusRoutes);
 app.use("/api/customers", customersRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/appsettings", appSettingsRoutes);
+app.use("/api/upload", uploadRoutes); // Upload routes
+app.use("/api/reviews", reviewsRoutes); // Reviews routes
+app.use("/api/dish-ratings", dishRatingsRoutes); // Dish ratings routes
 app.use("/api", modifiersRoutes); // This catches all /api/* routes
 app.use("/api/menu-item-modifier-group", menuItemModifierGroupRoutes);
 app.use("/api/items", menuItemPhotoRoutes);

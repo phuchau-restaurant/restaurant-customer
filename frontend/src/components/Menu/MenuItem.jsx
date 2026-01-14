@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Plus, Images, Check, ChevronDown } from "lucide-react";
+import { Plus, Images, Check, ChevronDown, AlertCircle, Star } from "lucide-react";
 
-const MenuItem = ({ product, onAdd, onImageClick }) => {
+const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
-  const [limitWarning, setLimitWarning] = useState(null);
+  const [validationMessage, setValidationMessage] = useState("");
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -16,15 +16,36 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
   const handleModifierSelect = (groupId, optionId, group) => {
     setSelectedModifiers((prev) => {
       const currentSelected = prev[groupId] || [];
-      const maxSelections = group.maxSelections || 1;
-      const minSelections = group.minSelections || 0;
+      const { minSelections, maxSelections } = group;
       
-      // Nếu đang bỏ chọn (deselect)
+      // Chỉ áp dụng radio behavior khi maxSelections = 1
+      // (minSelections = 1 không có nghĩa là chỉ chọn được 1, mà là phải chọn ít nhất 1)
+      if (maxSelections === 1) {
+        // Nếu click vào option đã chọn, giữ nguyên (không toggle off)
+        if (currentSelected.includes(optionId)) {
+          return prev;
+        }
+        // Nếu click vào option khác, thay thế
+        return { ...prev, [groupId]: [optionId] };
+      }
+      
+      // Multiple selection (checkbox behavior)
       if (currentSelected.includes(optionId)) {
+        // Bỏ chọn
         return {
           ...prev,
           [groupId]: currentSelected.filter((id) => id !== optionId),
         };
+      } else {
+        // Thêm option mới
+        let newSelected = [...currentSelected, optionId];
+        
+        // Nếu vượt quá maxSelections, xóa option cũ nhất (FIFO)
+        if (maxSelections && newSelected.length > maxSelections) {
+          newSelected = newSelected.slice(1); // Bỏ phần tử đầu tiên
+        }
+        
+        return { ...prev, [groupId]: newSelected };
       }
       
       // Nếu đang chọn thêm (select)
@@ -94,28 +115,62 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
     return result;
   };
 
-  // Handle add với modifiers
-  const handleAddToCart = () => {
-    // Validate required modifiers và min_selections
-    if (product.modifierGroups && product.modifierGroups.length > 0) {
-      for (const group of product.modifierGroups) {
-        if (!group.isActive) continue;
-        
-        const selectedCount = (selectedModifiers[group.id] || []).length;
-        
-        // Kiểm tra required
-        if (group.isRequired && selectedCount === 0) {
-          alert(`Vui lòng chọn ít nhất một tùy chọn cho "${group.name}"`);
-          return;
-        }
-        
-        // Kiểm tra min_selections
-        if (group.minSelections > 0 && selectedCount < group.minSelections) {
-          alert(`Vui lòng chọn ít nhất ${group.minSelections} tùy chọn cho "${group.name}"`);
-          return;
-        }
+  // Validate modifiers
+  const validateModifiers = () => {
+    if (!product.modifierGroups || product.modifierGroups.length === 0) {
+      return { isValid: true };
+    }
+
+    for (const group of product.modifierGroups) {
+      if (!group.isActive) continue;
+      
+      const selectedCount = (selectedModifiers[group.id] || []).length;
+      
+      // Kiểm tra isRequired - Nếu bắt buộc thì phải chọn ít nhất 1
+      if (group.isRequired && selectedCount === 0) {
+        return {
+          isValid: false,
+          message: `Vui lòng chọn ít nhất một tùy chọn cho "${group.name}"`
+        };
+      }
+      
+      // Chỉ validate minSelections/maxSelections nếu:
+      // 1. Group bắt buộc (isRequired = true), HOẶC
+      // 2. User đã bắt đầu chọn (selectedCount > 0)
+      const shouldValidateRange = group.isRequired || selectedCount > 0;
+      
+      if (shouldValidateRange && group.minSelections && selectedCount < group.minSelections) {
+        return {
+          isValid: false,
+          message: `"${group.name}" yêu cầu chọn ít nhất ${group.minSelections} tùy chọn`
+        };
+      }
+      
+      // maxSelections luôn validate nếu user đã chọn (không cho vượt quá)
+      if (selectedCount > 0 && group.maxSelections && selectedCount > group.maxSelections) {
+        return {
+          isValid: false,
+          message: `"${group.name}" chỉ cho phép chọn tối đa ${group.maxSelections} tùy chọn`
+        };
       }
     }
+    
+    return { isValid: true };
+  };
+
+  // Handle add với modifiers
+  const handleAddToCart = () => {
+    // Validate trước khi thêm
+    const validation = validateModifiers();
+    if (!validation.isValid) {
+      setValidationMessage(validation.message);
+      // Auto-hide sau 5 giây
+      setTimeout(() => setValidationMessage(""), 5000);
+      return;
+    }
+    
+    // Clear validation message nếu valid
+    setValidationMessage("");
     
     const modifiersData = getSelectedModifiersData();
     const modifiersPrice = modifiersData.reduce((sum, m) => sum + m.price, 0);
@@ -155,8 +210,50 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
             <Images size={16} />
           </div>
         )}
+
+        
+        {/* Chef Recommended Badge */}
+        {product.isRecommended && (
+           <div className="absolute top-2 right-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg z-10 animate-bounce-slow">
+             <span>👨‍🍳</span>
+             <span>Đề xuất</span>
+           </div>
+        )}
       </div>
       <div className="flex-1 flex flex-col">
+        {/* Rating Section - Vibrant Yellow Design - Clickable */}
+        <div 
+          className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80 transition-opacity w-fit"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (product.rating && product.rating.totalReviews > 0) {
+              onShowReviews?.(product);
+            }
+          }}
+        >
+          {product.rating && product.rating.totalReviews > 0 ? (
+            <>
+              <div className="flex items-center gap-1 bg-gradient-to-r from-yellow-50 to-orange-50 px-2 py-1 rounded-lg border border-yellow-200">
+                <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                <span className="text-sm font-bold text-yellow-700">
+                  {parseFloat(product.rating.averageRating).toFixed(1)}
+                </span>
+              </div>
+              <span className="text-xs text-gray-600 font-medium underline decoration-dotted">
+                ({product.rating.totalReviews} đánh giá)
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-200">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="text-sm font-bold text-yellow-600">0.0</span>
+              </div>
+              <span className="text-xs text-yellow-600 font-medium">(Chưa có đánh giá)</span>
+            </>
+          )}
+        </div>
+        
         <div className="flex-1 min-w-0 mb-3">
           <h3 className="font-bold text-gray-800 text-2xl mb-1 font-oswald">
             {product.name}
@@ -183,9 +280,12 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                 const isSingleChoice = group.minSelections === 1;
                 const isOpen = openGroups[group.id];
                 const selectedCount = (selectedModifiers[group.id] || []).length;
+                const isRequiredNotMet = group.isRequired && selectedCount === 0;
                 
                 return (
-                  <div key={group.id} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                  <div key={group.id} className={`bg-gray-50 rounded-lg overflow-hidden border-2 transition-colors ${
+                    isRequiredNotMet ? 'border-red-300' : 'border-gray-200'
+                  }`}>
                     {/* Header - Clickable */}
                     <button
                       onClick={(e) => {
@@ -216,12 +316,15 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                         )}
                       </div>
                       <span className="text-xs text-gray-500">
-                        {group.maxSelections === 1 
+                        {group.maxSelections === 1
                           ? "Chọn 1" 
-                          : group.minSelections > 0 && group.maxSelections > 1
-                          ? `Chọn ${group.minSelections}-${group.maxSelections}`
-                          : `Chọn tối đa ${group.maxSelections}`
-                        }
+                          : group.minSelections && group.maxSelections
+                            ? `Chọn ${group.minSelections}-${group.maxSelections}`
+                            : group.minSelections
+                              ? `Tối thiểu ${group.minSelections}`
+                              : group.maxSelections
+                                ? `Tối đa ${group.maxSelections}`
+                                : "Chọn nhiều"}
                       </span>
                     </button>
                     
@@ -230,6 +333,7 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
                       <div className="px-3 pb-3 space-y-2 border-t border-gray-200 pt-2">
                         {group.options?.filter(opt => opt.isActive).map((option) => {
                           const isSelected = isModifierSelected(group.id, option.id);
+                          
                           return (
                             <button
                               key={option.id}
@@ -273,7 +377,18 @@ const MenuItem = ({ product, onAdd, onImageClick }) => {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2">
+        
+        {/* Inline Validation Message */}
+        {validationMessage && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 animate-shake">
+            <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 font-medium">
+              {validationMessage}
+            </p>
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between gap-2 mt-3">
           <div className="flex flex-col">
             <p className="text-amber-600 text-[30px] font-smooch-sans font-bold leading-none">
               {calculateTotalPrice().toLocaleString("vi-VN")}đ

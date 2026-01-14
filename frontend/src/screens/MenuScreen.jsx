@@ -19,6 +19,7 @@ import Pagination from "../components/Pagination/Pagination";
 import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 import ProfileSidebar from "../components/Profile/ProfileSidebar";
+import DishReviewsModal from "../components/Menu/DishReviewsModal";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -37,11 +38,13 @@ const MenuScreen = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [selectedDishForReviews, setSelectedDishForReviews] = useState(null);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("default");
   const [priceFilter, setPriceFilter] = useState("all");
+  const [isRecommended, setIsRecommended] = useState(false);
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -87,15 +90,17 @@ const MenuScreen = () => {
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
         const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
         
-        // Disable pagination when searching/filtering (client-side filtering)
-        const hasClientFilter = searchQuery || sortBy !== "default" || priceFilter !== "all";
-        
+        // All filtering is now done server-side, always use pagination
         const result = await fetchMenus({
           categoryId,
           categories,
           activeCategory,
-          pageNumber: hasClientFilter ? null : currentPage,
-          pageSize: hasClientFilter ? null : pageSize,
+          pageNumber: currentPage,
+          pageSize: pageSize,
+          sortBy: sortBy === 'default' ? null : sortBy,
+          isRecommended,
+          searchQuery: searchQuery || null,
+          priceRange: priceFilter === 'all' ? null : priceFilter,
         });
         
         // Handle paginated response
@@ -120,45 +125,12 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter, isRecommended]);
 
-  // Filter and Sort Logic
+  // All filtering and sorting is now handled by backend
   const filteredAndSortedProducts = useMemo(() => {
-    let result = [...products];
-
-    // 1. Search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.description && p.description.toLowerCase().includes(query))
-      );
-    }
-
-    // 2. Filter by Price
-    if (priceFilter !== "all") {
-      result = result.filter((p) => {
-        if (priceFilter === "under-50") return p.price < 50000;
-        if (priceFilter === "50-100") return p.price >= 50000 && p.price <= 100000;
-        if (priceFilter === "above-100") return p.price > 100000;
-        return true;
-      });
-    }
-
-    // 3. Sort
-    if (sortBy !== "default") {
-      result.sort((a, b) => {
-        if (sortBy === "price-asc") return a.price - b.price;
-        if (sortBy === "price-desc") return b.price - a.price;
-        if (sortBy === "name-asc") return a.name.localeCompare(b.name);
-        if (sortBy === "name-desc") return b.name.localeCompare(a.name);
-        return 0;
-      });
-    }
-
-    return result;
-  }, [products, searchQuery, sortBy, priceFilter]);
+    return products;
+  }, [products]);
 
   // Pagination Handlers
   const handlePageChange = (newPage) => {
@@ -179,9 +151,17 @@ const MenuScreen = () => {
   // Submit order handler
   const handleSubmitOrder = async () => {
     try {
+      // Get customerId from customer context
+      const customerId = customer?.customerId || customer?.id;
+      
+      if (!customerId) {
+        showError("Vui lòng đăng nhập để đặt món!");
+        return;
+      }
+
       await submitOrder({
         tableId: tableInfo.id,
-        customerId: 1,
+        customerId: customerId,
         dishes: cart,
       });
 
@@ -494,14 +474,30 @@ const MenuScreen = () => {
                 <option value="price-desc">Giá giảm dần</option>
                 <option value="name-asc">Tên (A-Z)</option>
                 <option value="name-desc">Tên (Z-A)</option>
+                <option value="popular">Phổ biến nhất</option>
               </select>
               <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
             </div>
+            
+             {/* Chef Recommended Toggle */}
+            <button
+              onClick={() => setIsRecommended(!isRecommended)}
+              className={`px-4 py-2 flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors border whitespace-nowrap ${
+                isRecommended
+                  ? "bg-orange-100 border-orange-200 text-orange-700 shadow-xs"
+                  : "bg-white border-gray-200 text-gray-700 hover:border-orange-300 hover:bg-orange-50"
+              }`}
+            >
+              <span>👨‍🍳</span>
+              <span className="hidden md:inline">Đầu bếp </span>đề xuất
+            </button>
           </div>
         </motion.div>
 
         <motion.div
+  // ...
+
           className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -550,18 +546,21 @@ const MenuScreen = () => {
                   product={product}
                   onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
                   onImageClick={(product) => setGalleryProduct(product)}
+                  onShowReviews={(product) => setSelectedDishForReviews({
+                    id: product.id,
+                    name: product.name,
+                    image: product.photos?.find((p) => p.isPrimary)?.url || product.imgUrl,
+                    rating: product.rating
+                  })}
                 />
               </motion.div>
             ))
           )}
         </motion.div>
 
-        {/* Pagination Component - Only show when not searching/filtering */}
+        {/* Pagination Component - Always show when there are results */}
         {!isLoadingMenu && 
-         filteredAndSortedProducts.length > 0 && 
-         !searchQuery && 
-         sortBy === "default" && 
-         priceFilter === "all" && (
+         filteredAndSortedProducts.length > 0 && (
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -668,6 +667,13 @@ const MenuScreen = () => {
         onClose={() => setIsProfileOpen(false)}
         customer={displayCustomer}
         currentAvatar={displayAvatar}
+      />
+      
+      {/* Dish Reviews Modal - Full Screen */}
+      <DishReviewsModal
+        isOpen={!!selectedDishForReviews}
+        onClose={() => setSelectedDishForReviews(null)}
+        dish={selectedDishForReviews}
       />
     </motion.div>
   );

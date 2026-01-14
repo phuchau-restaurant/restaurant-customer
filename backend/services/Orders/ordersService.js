@@ -2,11 +2,14 @@
 import OrdersStatus from "../../constants/orderStatus.js";
 import OrderDetailStatus from "../../constants/orderdetailStatus.js";
 class OrdersService {
-  // Inject 3 Repo: Orders, OrderDetails và Menus (để check giá món)
-  constructor(ordersRepo, orderDetailsRepo, menusRepo) {
+  // Inject 6 Repo: Orders, OrderDetails, Menus, OrderItemModifiers, ModifierOptions, Tables
+  constructor(ordersRepo, orderDetailsRepo, menusRepo, orderItemModifiersRepo, modifierOptionsRepo, tablesRepo) {
     this.ordersRepo = ordersRepo;
     this.orderDetailsRepo = orderDetailsRepo;
     this.menusRepo = menusRepo;
+    this.orderItemModifiersRepo = orderItemModifiersRepo;
+    this.modifierOptionsRepo = modifierOptionsRepo;
+    this.tablesRepo = tablesRepo;
   }
 
   async createOrder({ tenantId, tableId, customerId, dishes }) {
@@ -18,11 +21,12 @@ class OrdersService {
 
     // 1. Tính toán & Chuẩn bị data chi tiết
     let calculatedTotalAmount = 0;
+    let totalPrepTime = 0; // Tổng thời gian chuẩn bị
     const orderDetailsToCreate = [];
 
     for (const dish of dishes) {
-      // API gửi dishId, quantity, description
-      const { dishId, quantity, description } = dish;
+      // API gửi dishId, quantity, description, modifiers
+      const { dishId, quantity, description, modifiers } = dish;
 
       if (!dishId || quantity <= 0) continue;
 
@@ -37,16 +41,54 @@ class OrdersService {
       }
 
       const unitPrice = menuItem.price;
-      const subTotal = unitPrice * quantity;
+
+      // Cộng dồn thời gian chuẩn bị của từng món
+      if (menuItem.prepTimeMinutes) {
+        totalPrepTime += menuItem.prepTimeMinutes * quantity;
+      }
+
+      // Track order count: Count number of ORDERS (not quantity) containing this dish
+      // This will be incremented ONCE per order, regardless of quantity
+      // We'll do this after the loop to avoid duplicate increments for same dish in one order
+      if (!orderDetailsToCreate.find(d => d.dishId === dishId)) {
+        // First time seeing this dish in current order
+        try {
+          const currentCount = menuItem.orderCount || 0;
+          await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
+        } catch (err) {
+          console.error(`Failed to update order count for dish ${dishId}`, err);
+          // Ignore error to not fail the order creation
+        }
+      }
+
+      // Tính giá modifiers và lấy tên chuẩn từ DB
+      let modifierTotal = 0;
+      if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
+        for (const mod of modifiers) {
+           const modOption = await this.modifierOptionsRepo.getById(mod.optionId);
+           if (modOption) {
+             modifierTotal += Number(modOption.price);
+             // Gán lại tên và giá chuẩn để dùng cho bước sau (lưu vào bảng order_item_modifiers)
+             mod.optionName = modOption.name;
+             mod.price = Number(modOption.price);
+           } else {
+             // Trường hợp không tìm thấy option (dữ liệu rác hoặc đã bị xóa)
+             mod.optionName = "Unknown Option"; 
+           }
+        }
+      }
+
+      const subTotal = (unitPrice + modifierTotal) * quantity;
       calculatedTotalAmount += subTotal;
 
       orderDetailsToCreate.push({
         tenantId,
-        dishId: dishId, // Model OrderDetails dùng dishId
+        dishId: dishId,
         quantity,
         unitPrice,
-        note: description, // Map description từ API vào note
+        note: description,
         status: null,
+        modifiers, // Lưu modifiers tạm để xử lý sau
       });
     }
 
@@ -54,9 +96,10 @@ class OrdersService {
     const newOrder = await this.ordersRepo.create({
       tenantId,
       tableId,
-      customerId,
+      customerId, // Thêm customerId vào order
       status: OrdersStatus.UNSUBMIT, // Mặc định khi tạo là 'Unsubmit'
       totalAmount: calculatedTotalAmount,
+      prepTimeOrder: totalPrepTime, // Tổng thời gian chuẩn bị đơn hàng
       // Tạo mã đơn hiển thị (ví dụ đơn giản)
       displayOrder: `ORD-${Date.now().toString().slice(-6)}`,
     });
@@ -64,16 +107,38 @@ class OrdersService {
     if (!newOrder) throw new Error("Failed to create order");
 
     // 3. Gắn OrderID vào các chi tiết và Lưu hàng loạt
-    const finalDetailsPayload = orderDetailsToCreate.map((detail) => ({
-      ...detail,
-      orderId: newOrder.id,
-    }));
+    const finalDetailsPayload = orderDetailsToCreate.map((detail) => {
+      const { modifiers, ...rest } = detail; // Tách modifiers ra
+      return {
+        ...rest,
+        orderId: newOrder.id,
+      };
+    });
 
     const createdDetails = await this.orderDetailsRepo.createMany(
       finalDetailsPayload
     );
 
-    // 4. Trả về kết quả gộp
+    // 4. Lưu modifiers vào bảng order_item_modifiers
+    const modifiersToCreate = [];
+    createdDetails.forEach((detail, index) => {
+      const originalDish = orderDetailsToCreate[index];
+      if (originalDish.modifiers && Array.isArray(originalDish.modifiers)) {
+        originalDish.modifiers.forEach((mod) => {
+          modifiersToCreate.push({
+            orderDetailId: detail.id,
+            modifierOptionId: mod.optionId,
+            optionName: mod.optionName,
+          });
+        });
+      }
+    });
+
+    if (modifiersToCreate.length > 0) {
+      await this.orderItemModifiersRepo.createMany(modifiersToCreate);
+    }
+
+    // 5. Trả về kết quả gộp
     return {
       order: newOrder,
       details: createdDetails,
@@ -88,22 +153,191 @@ class OrdersService {
     if (tenantId && order.tenantId !== tenantId)
       throw new Error("Access denied: Order belongs to another tenant");
 
+    // Lấy tên bàn
+    let tableNumber = order.tableId;
+    if (order.tableId && this.tablesRepo) {
+      const tableInfo = await this.tablesRepo.getById(order.tableId);
+      if (tableInfo) {
+        tableNumber = tableInfo.tableNumber;
+      }
+    }
+    // Enrich order với tableNumber
+    const enrichedOrder = { ...order, tableNumber };
+
     // Lấy thêm chi tiết món
     const details = await this.orderDetailsRepo.getByOrderId(id);
 
-    return { order, details };
+    // Resolve dishName từ dishId bằng cách fetch menu items
+    const dishIds = details.map((d) => d.dishId);
+    const dishesInfo = await this.menusRepo.getByIds(dishIds);
+
+    // Map dishName và thông tin menu đầy đủ vào details
+    const enrichedDetails = details.map((detail) => {
+      const dishInfo = dishesInfo.find((d) => d.id === detail.dishId);
+      return {
+        ...detail,
+        dishName: dishInfo?.name || "Unknown Dish",
+        menu: dishInfo
+          ? {
+            id: dishInfo.id,
+            name: dishInfo.name,
+            categoryId: dishInfo.categoryId,
+            image: dishInfo.image,
+            price: dishInfo.price,
+          }
+          : null,
+      };
+    });
+
+    // Fetch modifiers cho các order details
+    const detailIds = details.map((d) => d.id);
+    const allModifiers = await this.orderItemModifiersRepo.getByOrderDetailIds(
+      detailIds
+    );
+
+    // Group modifiers by order_detail_id và gắn vào details
+    // Group modifiers by order_detail_id và gắn vào details
+    // Đồng thời fetch thông tin giá từ bảng modifier_options nếu cần
+    const modifierOptionIds = allModifiers.map(m => m.modifierOptionId);
+
+    // Fetch full modifier options info (để lấy giá)
+    let modifierOptionsDetails = [];
+    if (modifierOptionIds.length > 0 && this.modifierOptionsRepo) {
+      // Giả sử có hàm getByIds. Nếu không có thì dùng Promise.all hoặc sửa Repo
+      // Ở đây ta dùng Promise.all tạm thời nếu repo chưa support getByIds
+      modifierOptionsDetails = await Promise.all(
+        modifierOptionIds.map(id => this.modifierOptionsRepo.getById(id))
+      );
+    }
+
+    const enrichedDetailsWithModifiers = enrichedDetails.map((detail) => ({
+      ...detail,
+      modifiers: allModifiers
+        .filter((mod) => mod.orderDetailId === detail.id)
+        .map((mod) => {
+          const fullOption = modifierOptionsDetails.find(opt => opt && opt.id === mod.modifierOptionId);
+          return {
+            ...mod.toResponse(),
+            price: fullOption ? fullOption.price : 0
+          };
+        }),
+    }));
+
+    return { order: enrichedOrder, details: enrichedDetailsWithModifiers };
   }
   async updateOrder(id, tenantId, updates) {
     const currentOrder = await this.getOrderById(id, tenantId);
 
-    // Kiểm tra logic nghiệp vụ
+    // Nếu request gửi dishes mới, cần xóa old details và tạo new details
+    if (updates.dishes && Array.isArray(updates.dishes)) {
+      const dishes = updates.dishes;
+
+      // 1. Lấy danh sách order detail IDs hiện tại
+      const currentDetails = await this.orderDetailsRepo.getByOrderId(id);
+      const currentDetailIds = currentDetails.map((d) => d.id);
+
+      // 2. Xóa modifiers cũ trước
+      if (currentDetailIds.length > 0) {
+        await this.orderItemModifiersRepo.deleteByOrderDetailIds(
+          currentDetailIds
+        );
+      }
+
+      // 3. Xóa order details cũ
+      await this.orderDetailsRepo.deleteByOrderId(id);
+
+      // 4. Tính toán totalAmount và prepTimeOrder từ dishes mới
+      let calculatedTotalAmount = 0;
+      let totalPrepTime = 0; // Tổng thời gian chuẩn bị
+      const orderDetailsToCreate = [];
+
+      for (const dish of dishes) {
+        const { dishId, quantity, description, modifiers } = dish;
+
+        if (!dishId || quantity <= 0) continue;
+
+        // Lấy thông tin món từ DB để lấy giá chính xác
+        const menuItem = await this.menusRepo.getById(dishId);
+        if (!menuItem) {
+          throw new Error(`Dish with ID ${dishId} not found`);
+        }
+
+        const unitPrice = menuItem.price;
+
+        // Cộng dồn thời gian chuẩn bị của từng món
+        if (menuItem.prepTimeMinutes) {
+          totalPrepTime += menuItem.prepTimeMinutes * quantity;
+        }
+
+        // Tính giá modifiers
+        let modifierTotal = 0;
+        if (modifiers && Array.isArray(modifiers)) {
+          modifierTotal = modifiers.reduce(
+            (sum, mod) => sum + (mod.price || 0),
+            0
+          );
+        }
+
+        const subTotal = (unitPrice + modifierTotal) * quantity;
+        calculatedTotalAmount += subTotal;
+
+        orderDetailsToCreate.push({
+          tenantId,
+          orderId: id,
+          dishId,
+          quantity,
+          unitPrice,
+          note: description || "",
+          status: OrderDetailStatus.PENDING,
+          modifiers, // Lưu tạm
+        });
+      }
+
+      // 5. Tạo new order details
+      if (orderDetailsToCreate.length > 0) {
+        const finalDetailsPayload = orderDetailsToCreate.map((detail) => {
+          const { modifiers, ...rest } = detail;
+          return rest;
+        });
+
+        const createdDetails = await this.orderDetailsRepo.createMany(
+          finalDetailsPayload
+        );
+
+        // 6. Lưu modifiers mới
+        const modifiersToCreate = [];
+        createdDetails.forEach((detail, index) => {
+          const originalDish = orderDetailsToCreate[index];
+          if (originalDish.modifiers && Array.isArray(originalDish.modifiers)) {
+            originalDish.modifiers.forEach((mod) => {
+              modifiersToCreate.push({
+                orderDetailId: detail.id,
+                modifierOptionId: mod.optionId,
+                optionName: mod.optionName,
+              });
+            });
+          }
+        });
+
+        if (modifiersToCreate.length > 0) {
+          await this.orderItemModifiersRepo.createMany(modifiersToCreate);
+        }
+      }
+
+      // 7. Update totalAmount và prepTimeOrder
+      updates.totalAmount = calculatedTotalAmount;
+      updates.prepTimeOrder = totalPrepTime;
+      // Bỏ dishes khỏi updates vì đã xử lý riêng
+      delete updates.dishes;
+    }
+
+    // Kiểm tra logic nghiệp vụ status
 
     // IF OrderStatus == Pending -> All OrderDetail status = Pending
     if (
       updates.status === OrdersStatus.PENDING &&
       currentOrder.order.status !== OrdersStatus.PENDING
     ) {
-      console.log();
       await this.orderDetailsRepo.updateByOrderId(id, {
         status: OrderDetailStatus.PENDING,
       });
@@ -114,17 +348,44 @@ class OrdersService {
       updates.status === OrdersStatus.COMPLETED &&
       currentOrder.order.status !== OrdersStatus.COMPLETED
     ) {
-      // All OrderDetail.Status != ORDER_DETAIL_STATUS.PENDING
+      // Tự động chuyển các OrderDetail có status Pending/Preparing thành Ready
       const allDetails = currentOrder.details;
-      const allServed = allDetails.every(
-        (item) => item.status !== OrderDetailStatus.PENDING // Ready, Served, Cancelled
+      const pendingOrPreparingItems = allDetails.filter(
+        (item) => item.status === OrderDetailStatus.PENDING || item.status === OrderDetailStatus.PREPARING
       );
-      if (!allServed) {
-        throw new Error(
-          "Cannot complete order: there are still pending dishes"
-        );
+
+      // Update các items chưa hoàn thành thành Ready
+      if (pendingOrPreparingItems.length > 0) {
+        for (const item of pendingOrPreparingItems) {
+          await this.orderDetailsRepo.update(item.id, {
+            status: OrderDetailStatus.READY,
+          });
+        }
       }
-      updates.completedAt = new Date(); // TODO: Date hay Date utc ?
+
+      updates.completedAt = new Date();
+    }
+
+    // IF OrderStatus == Served -> Tự động chuyển các items thành Served
+    else if (
+      updates.status === OrdersStatus.SERVED &&
+      currentOrder.order.status !== OrdersStatus.SERVED
+    ) {
+      // Chuyển tất cả items còn Ready thành Served
+      const allDetails = currentOrder.details;
+      const readyItems = allDetails.filter(
+        (item) => item.status === OrderDetailStatus.READY ||
+          item.status === OrderDetailStatus.PENDING ||
+          item.status === OrderDetailStatus.PREPARING
+      );
+
+      if (readyItems.length > 0) {
+        for (const item of readyItems) {
+          await this.orderDetailsRepo.update(item.id, {
+            status: OrderDetailStatus.SERVED,
+          });
+        }
+      }
     }
 
     // IF OrderStatus == Cancelled -> All OrderDetail = Cancelled
@@ -137,18 +398,26 @@ class OrdersService {
       });
     }
 
-    // 3. Gọi Repo update
+    // 3. Gọi Repo update order header
     return await this.ordersRepo.update(id, updates);
   }
 
   async deleteOrder(id, tenantId) {
     await this.getOrderById(id, tenantId);
 
-    // 2. Xóa dữ liệu con trước (OrderDetails)
-    // Để tránh lỗi Foreign Key Constraint nếu DB không có Cascade Delete
+    // 1. Lấy order detail IDs
+    const details = await this.orderDetailsRepo.getByOrderId(id);
+    const detailIds = details.map((d) => d.id);
+
+    // 2. Xóa modifiers trước (nếu có)
+    if (detailIds.length > 0) {
+      await this.orderItemModifiersRepo.deleteByOrderDetailIds(detailIds);
+    }
+
+    // 3. Xóa order details
     await this.orderDetailsRepo.deleteByOrderId(id);
 
-    // 3. Xóa dữ liệu cha (Order)
+    // 4. Xóa order
     return await this.ordersRepo.delete(id);
   }
 
@@ -174,15 +443,30 @@ class OrdersService {
     categoryId = null,
     itemStatus = null
   ) {
-    const orders = await this.ordersRepo.getAll({
+    // Lấy tất cả đơn TRỪ Unsubmit (Kitchen chỉ thấy đơn đã được waiter xác nhận)
+    let orders = await this.ordersRepo.getAll({
       tenant_id: tenantId,
       status: orderStatus, //filter order by status
     });
+
+    // Kitchen LUÔN lọc bỏ đơn Unsubmit (không giống waiter)
+    // Bếp chỉ thấy đơn đã được waiter xác nhận gửi
+    orders = orders.filter(o => o.status !== OrdersStatus.UNSUBMIT);
 
     if (!orders || orders.length === 0) return [];
 
     //  Lấy danh sách các order_id
     const orderIds = orders.map((o) => o.id);
+
+    // --- LẤY TÊN BÀN ---
+    // Lấy danh sách table_id duy nhất
+    const tableIds = [...new Set(orders.map(o => o.tableId))];
+    const tablesInfo = await this.tablesRepo.getByIds(tableIds);
+    // Tạo map để tra cứu nhanh: tableId -> tableName
+    const tableMap = {};
+    tablesInfo.forEach(table => {
+      tableMap[table.id] = table.tableNumber;
+    });
 
     // Lấy toàn bộ OrderDetails của các đơn này
     // và lọc theo itemStatus nếu có
@@ -195,6 +479,12 @@ class OrdersService {
     // Lấy ra tất cả dishId từ list chi tiết -> theo api contact
     const dishIds = allDetails.map((d) => d.dishId);
     const dishesInfo = await this.menusRepo.getByIds(dishIds);
+
+    // --- LẤY MODIFIERS ---
+    const detailIds = allDetails.map((d) => d.id);
+    const allModifiers = await this.orderItemModifiersRepo.getByOrderDetailIds(
+      detailIds
+    );
 
     // Ghép dữ liệu lại theo cấu trúc yêu cầu
     const result = orders
@@ -217,6 +507,15 @@ class OrdersService {
               return null; // comment dòng này để trả về tất cả các món
             }
 
+            // Lọc modifiers cho item này
+            const itemModifiers = allModifiers
+              .filter((m) => m.orderDetailId === item.id)
+              .map((m) => ({
+                id: m.id,
+                optionName: m.optionName,
+                price: m.price,
+              }));
+
             return {
               order_detail_id: item.id,
               dishId: item.dishId,
@@ -224,6 +523,7 @@ class OrdersService {
               quantity: item.quantity,
               note: item.note,
               status: item.status,
+              modifiers: itemModifiers, // Thêm modifiers vào response
               // Trả về categoryId để frontend tiện debug nếu cần
               categoryId: dish ? dish.categoryId : null,
               image: dish ? dish.imgUrl : null,
@@ -238,9 +538,11 @@ class OrdersService {
 
         return {
           orderId: order.id,
-          tableId: order.tableId,
+          tableId: tableMap[order.tableId] || order.tableId, // Trả về tên bàn, fallback về ID nếu không tìm thấy
+          orderStatus: order.status, // Trạng thái đơn (Approved, Pending, etc) cho Kitchen button
           note: order.note || "...",
           createdAt: order.createdAt,
+          prepTimeOrder: order.prepTimeOrder, // Thời gian chuẩn bị đơn hàng (phút)
           dishes: visibleDishes, // Chỉ trả về các món đã lọc
         };
       })
@@ -276,9 +578,9 @@ class OrdersService {
       );
 
       if (allServed) {
-        // Tự động update trạng thái đơn hàng cha thành 'completed'
+        // Tự động update trạng thái đơn hàng cha thành 'Served' (Đã phục vụ)
         await this.ordersRepo.update(orderId, {
-          status: OrdersStatus.COMPLETED,
+          status: OrdersStatus.SERVED,
           completedAt: new Date(),
         });
       }
@@ -286,6 +588,212 @@ class OrdersService {
 
     return updatedItem;
   }
-}
 
+  // === WAITER ORDER METHODS ===
+
+  /**
+   * Nhận đơn - Gán waiter_id vào đơn hàng và chuyển trạng thái sang Pending
+   * @param {number} orderId - ID đơn hàng
+   * @param {string} waiterId - ID nhân viên phục vụ
+   * @param {string} tenantId - ID tenant
+   * @param {boolean} confirmUnconfirmed - Xác nhận cập nhật món null sang Pending
+   */
+  async claimOrder(orderId, waiterId, tenantId, confirmUnconfirmed = false) {
+    // 1. Kiểm tra đơn hàng tồn tại và thuộc tenant
+    const { order, details } = await this.getOrderById(orderId, tenantId);
+
+    // 2. Kiểm tra đơn chưa được nhận
+    if (order.waiterId) {
+      throw new Error("Order already claimed by another waiter");
+    }
+
+    // 3. Kiểm tra và đếm các món chưa xác nhận (status null hoặc không phải Pending/Ready/Served/Cancelled)
+    const unconfirmedItems = details.filter(item =>
+      !item.status ||
+      (item.status !== OrderDetailStatus.PENDING &&
+        item.status !== OrderDetailStatus.READY &&
+        item.status !== OrderDetailStatus.SERVED &&
+        item.status !== OrderDetailStatus.CANCELLED)
+    );
+
+    // 3.1. Nếu có món chưa xác nhận và người dùng chưa confirm -> trả về thông tin để frontend xử lý
+    if (unconfirmedItems.length > 0 && !confirmUnconfirmed) {
+      return {
+        needsConfirmation: true,
+        unconfirmedItems: unconfirmedItems.map(item => ({
+          id: item.id,
+          dishId: item.dishId,
+          name: item.name,
+          quantity: item.quantity,
+          status: item.status
+        })),
+        order: order,
+        details: details
+      };
+    }
+
+    // 4. Gán waiter_id và chuyển trạng thái ĐƠN sang Approved
+    const updatedOrder = await this.ordersRepo.update(orderId, {
+      waiterId: waiterId,
+      status: OrdersStatus.APPROVED,
+    });
+
+    // 5. Chuyển các món chưa xác nhận sang Pending (nếu có và đã được confirm)
+    for (const item of unconfirmedItems) {
+      await this.orderDetailsRepo.update(item.id, {
+        status: OrderDetailStatus.PENDING,
+      });
+    }
+
+    // 6. Trả về order đầy đủ với details và thông tin về số món đã cập nhật
+    const result = await this.getOrderById(orderId, tenantId);
+    return {
+      needsConfirmation: false,
+      ...result,
+      itemsUpdatedToPending: unconfirmedItems.length
+    };
+  }
+
+  /**
+   * Lấy đơn hàng của nhân viên phục vụ (đơn của tôi)
+   * @param {string} waiterId - ID nhân viên
+   * @param {string} tenantId - ID tenant
+   */
+  async getMyOrders(waiterId, tenantId) {
+    if (!tenantId) throw new Error("Tenant ID is required");
+    if (!waiterId) throw new Error("Waiter ID is required");
+
+    console.log(`📋 getMyOrders: waiterId=${waiterId}, tenantId=${tenantId}`);
+    const orders = await this.ordersRepo.getByWaiterId(waiterId, tenantId);
+    console.log(`📋 getMyOrders: Found ${orders.length} orders, statuses:`, orders.map(o => o.status));
+
+    // Enrich with table names
+    if (orders && orders.length > 0) {
+      const tableIds = [...new Set(orders.map(o => o.tableId))];
+      const tablesInfo = await this.tablesRepo.getByIds(tableIds);
+      const tableMap = {};
+      tablesInfo.forEach(table => {
+        tableMap[table.id] = table.tableNumber;
+      });
+
+      // Map table names to orders
+      return orders.map(order => ({
+        ...order,
+        tableNumber: tableMap[order.tableId] || order.tableId
+      }));
+    }
+
+    return orders;
+  }
+
+  /**
+   * Lấy đơn hàng chưa có người nhận
+   * @param {string} tenantId - ID tenant
+   */
+  async getUnassignedOrders(tenantId) {
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    const orders = await this.ordersRepo.getUnassignedOrders(tenantId);
+
+    // Enrich with table names
+    if (orders && orders.length > 0) {
+      const tableIds = [...new Set(orders.map(o => o.tableId))];
+      const tablesInfo = await this.tablesRepo.getByIds(tableIds);
+      const tableMap = {};
+      tablesInfo.forEach(table => {
+        tableMap[table.id] = table.tableNumber;
+      });
+
+      // Map table names to orders
+      return orders.map(order => ({
+        ...order,
+        tableNumber: tableMap[order.tableId] || order.tableId
+      }));
+    }
+
+    return orders;
+  }
+
+  /**
+   * Get all orders by customer ID with full details
+   * @param {string} customerId - Customer ID
+   * @param {string} tenantId - Tenant ID
+   * @returns {Promise<Array>} Array of orders with details
+   */
+  async getOrdersByCustomerId(customerId, tenantId) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    // Get all orders for this customer
+    const orders = await this.ordersRepo.getByCustomerId(customerId, tenantId);
+
+    if (!orders || orders.length === 0) {
+      return [];
+    }
+
+    // Enrich orders with full details
+    const enrichedOrders = await Promise.all(
+      orders.map(async (order) => {
+        // Get order details (items)
+        const details = await this.orderDetailsRepo.getByOrderId(order.id);
+
+        // Get dish info
+        const dishIds = details.map((d) => d.dishId);
+        const dishesInfo = await this.menusRepo.getByIds(dishIds);
+
+        // Get modifiers
+        const detailIds = details.map((d) => d.id);
+        const allModifiers = await this.orderItemModifiersRepo.getByOrderDetailIds(detailIds);
+
+        // Fetch modifier prices
+        const modifierOptionIds = allModifiers.map(m => m.modifierOptionId);
+        let modifierOptionsDetails = [];
+        if (modifierOptionIds.length > 0) {
+          modifierOptionsDetails = await Promise.all(
+            modifierOptionIds.map(id => this.modifierOptionsRepo.getById(id))
+          );
+        }
+
+        // Enrich details with dish names and modifiers
+        const enrichedDetails = details.map((detail) => {
+          const dishInfo = dishesInfo.find((d) => d.id === detail.dishId);
+          const itemModifiers = allModifiers
+            .filter((mod) => mod.orderDetailId === detail.id)
+            .map((mod) => {
+              const fullOption = modifierOptionsDetails.find(opt => opt && opt.id === mod.modifierOptionId);
+              return {
+                ...mod.toResponse(),
+                price: fullOption ? fullOption.price : 0
+              };
+            });
+
+          return {
+            ...detail,
+            dishName: dishInfo?.name || "Unknown Dish",
+            dishImage: dishInfo?.imgUrl || null,
+            dishPrice: dishInfo?.price || 0,
+            modifiers: itemModifiers,
+          };
+        });
+
+        // Get table info
+        let tableNumber = order.tableId;
+        if (order.tableId && this.tablesRepo) {
+          const tableInfo = await this.tablesRepo.getById(order.tableId);
+          if (tableInfo) {
+            tableNumber = tableInfo.tableNumber;
+          }
+        }
+
+        return {
+          ...order,
+          tableNumber,
+          items: enrichedDetails,
+        };
+      })
+    );
+
+    return enrichedOrders;
+  }
+}
 export default OrdersService;

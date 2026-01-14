@@ -52,7 +52,7 @@ const CustomerLoginScreen = () => {
         
         // Set mock table info for development
         const mockTableInfo = {
-          tableId: "dev-table-001",
+          tableId: 1, // Changed to integer for database compatibility
           tableNumber: "Bàn DEV #1",
         };
         

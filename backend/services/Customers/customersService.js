@@ -169,7 +169,7 @@ class CustomersService {
         }
 
        const existing = await this.customerRepo.findByPhoneNumber(tenantId, updates.phoneNumber.trim());
-       const isDuplicate = existing.some(cust => cust.id !== id && cust.phoneNumber === updates.phoneNumber.trim());
+       const isDuplicate = existing.some(cust => parseInt(cust.id) !== parseInt(id) && cust.phoneNumber === updates.phoneNumber.trim());
        if (isDuplicate) {
          throw new Error(`Customer with phone number '${updates.phoneNumber}' already exists`);
        }
@@ -322,7 +322,7 @@ class CustomersService {
       }
       // Check if email is already used by another customer
       const existingByEmail = await this.customerRepo.findByEmail(tenantId, profileData.email.trim());
-      const isDuplicate = existingByEmail.some(cust => cust.id !== customerId);
+      const isDuplicate = existingByEmail.some(cust => parseInt(cust.id) !== parseInt(customerId));
       if (isDuplicate) {
         throw new Error("Email already in use");
       }
@@ -335,7 +335,7 @@ class CustomersService {
       }
       // Check if phone is already used by another customer
       const existingByPhone = await this.customerRepo.findByPhoneNumber(tenantId, profileData.phoneNumber.trim());
-      const isDuplicate = existingByPhone.some(cust => cust.id !== customerId);
+      const isDuplicate = existingByPhone.some(cust => parseInt(cust.id) !== parseInt(customerId));
       if (isDuplicate) {
         throw new Error("Phone number already in use");
       }

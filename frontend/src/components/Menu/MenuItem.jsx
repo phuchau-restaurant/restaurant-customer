@@ -5,6 +5,7 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
   const [validationMessage, setValidationMessage] = useState("");
+  const [limitWarning, setLimitWarning] = useState(null);
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -19,7 +20,6 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
       const { minSelections, maxSelections } = group;
       
       // Chỉ áp dụng radio behavior khi maxSelections = 1
-      // (minSelections = 1 không có nghĩa là chỉ chọn được 1, mà là phải chọn ít nhất 1)
       if (maxSelections === 1) {
         // Nếu click vào option đã chọn, giữ nguyên (không toggle off)
         if (currentSelected.includes(optionId)) {
@@ -38,31 +38,16 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
         };
       } else {
         // Thêm option mới
-        let newSelected = [...currentSelected, optionId];
         
-        // Nếu vượt quá maxSelections, xóa option cũ nhất (FIFO)
-        if (maxSelections && newSelected.length > maxSelections) {
-          newSelected = newSelected.slice(1); // Bỏ phần tử đầu tiên
+        // Nếu đã đạt max selections, hiện warning và chặn chọn thêm
+        if (maxSelections && currentSelected.length >= maxSelections) {
+             setLimitWarning(`Bạn chỉ có thể chọn tối đa ${maxSelections} tùy chọn cho "${group.name}"`);
+             setTimeout(() => setLimitWarning(null), 3000);
+             return prev;
         }
         
-        return { ...prev, [groupId]: newSelected };
+        return { ...prev, [groupId]: [...currentSelected, optionId] };
       }
-      
-      // Nếu đang chọn thêm (select)
-      // Check max_selections limit
-      if (currentSelected.length >= maxSelections) {
-        // Nếu maxSelections = 1, thay thế option cũ (radio behavior)
-        if (maxSelections === 1) {
-          return { ...prev, [groupId]: [optionId] };
-        }
-        // Nếu maxSelections > 1 và đã đạt giới hạn, hiển thị warning
-        setLimitWarning(`Bạn chỉ có thể chọn tối đa ${maxSelections} tùy chọn cho "${group.name}"`);
-        setTimeout(() => setLimitWarning(null), 3000);
-        return prev;
-      }
-      
-      // Chọn thêm option mới
-      return { ...prev, [groupId]: [...currentSelected, optionId] };
     });
   };
 

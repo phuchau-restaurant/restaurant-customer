@@ -173,9 +173,18 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
 
   return (
     <div 
-      className={`bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border border-transparent flex flex-col h-full ${
-        isRecommendationsOpen ? "z-40 relative ring-2 ring-orange-100" : ""
+      className={`bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 flex flex-col h-full relative ${
+        isRecommendationsOpen ? "z-40 ring-2 ring-orange-100" : ""
+      } ${
+        product.isRecommended 
+          ? "border-2 border-transparent bg-gradient-to-r from-orange-400 via-pink-500 to-purple-500 bg-clip-padding animate-gradient-border" 
+          : "border-2 border-gray-200"
       }`}
+      style={product.isRecommended ? {
+        backgroundImage: 'linear-gradient(white, white), linear-gradient(90deg, #fb923c, #ec4899, #a855f7, #fb923c)',
+        backgroundOrigin: 'border-box',
+        backgroundClip: 'padding-box, border-box',
+      } : {}}
     >
       <div 
         className="relative w-full h-60 rounded-[2px] overflow-hidden mb-2 cursor-pointer group"

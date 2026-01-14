@@ -10,6 +10,7 @@ router.use(tenantMiddleware);
 
 // Routes cho CUSTOMER - chỉ cần tenant ID (đã verify QR ở trang login)
 router.get("/", menusController.getAll); // GET api/menus?categoryId=<id>&available=true
+router.get("/:id/recommendations", menusController.getRecommendations); // GET api/menus/:id/recommendations?limit=6
 router.get("/:id", menusController.getById); // GET api/menus/:id
 
 // Routes cho ADMIN - quản lý menu
@@ -18,3 +19,4 @@ router.put("/:id", menusController.update);
 //router.delete('/:id', menusController.delete);
 
 export default router;
+

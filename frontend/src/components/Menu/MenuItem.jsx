@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { Plus, Images, Check, ChevronDown, AlertCircle, Star } from "lucide-react";
+import RecommendationsDropdown from "./RecommendationsDropdown";
+
 
 const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
   const [selectedModifiers, setSelectedModifiers] = useState({});
   const [openGroups, setOpenGroups] = useState({});
   const [validationMessage, setValidationMessage] = useState("");
   const [limitWarning, setLimitWarning] = useState(null);
+  const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false);
 
   // Lấy ảnh chính (isPrimary = true) hoặc ảnh đầu tiên
   const primaryPhoto = product.photos?.find((p) => p.isPrimary) || product.photos?.[0];
@@ -169,7 +172,11 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
 
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow hover:-translate-y-1 border border-transparent flex flex-col h-full">
+    <div 
+      className={`bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 border border-transparent flex flex-col h-full ${
+        isRecommendationsOpen ? "z-40 relative ring-2 ring-orange-100" : ""
+      }`}
+    >
       <div 
         className="relative w-full h-60 rounded-[2px] overflow-hidden mb-2 cursor-pointer group"
         onClick={() => {
@@ -248,6 +255,15 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
               {product.description}
             </p>
           )}
+          
+          {/* Recommendations Dropdown Button */}
+          <div className="mt-3">
+            <RecommendationsDropdown 
+              dishId={product.id}
+              onAddToCart={onAdd}
+              onOpenChange={setIsRecommendationsOpen}
+            />
+          </div>
           
           {/* Warning Message */}
           {limitWarning && (

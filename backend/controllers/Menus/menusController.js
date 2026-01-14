@@ -178,12 +178,57 @@ class MenusController {
       const { id } = req.params;
       await this.menusService.deleteMenu(id, tenantId);
 
+
       return res.status(200).json({
         success: true,
         message: "Menu item deleted",
       });
     } catch (error) {
       error.statusCode = 400;
+      next(error);
+    }
+  };
+
+  /**
+   * Get recommended dishes for a specific dish
+   * [GET] /api/menus/:id/recommendations?limit=6
+   */
+  getRecommendations = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { id } = req.params;
+      const { limit = 6 } = req.query;
+
+      // Validate limit
+      const parsedLimit = parseInt(limit, 10);
+      if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 20) {
+        return res.status(400).json({
+          success: false,
+          message: "Limit must be between 1 and 20",
+        });
+      }
+
+      const recommendations = await this.menusService.getRecommendedDishes(
+        id,
+        tenantId,
+        parsedLimit
+      );
+
+      // Lọc bỏ tenantId từ response
+      const cleanedData = recommendations.map((item) => {
+        const { tenantId, ...rest } = item;
+        return rest;
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Recommendations fetched successfully",
+        data: cleanedData,
+      });
+    } catch (error) {
+      if (error.message.includes("not found")) {
+        error.statusCode = 404;
+      }
       next(error);
     }
   };

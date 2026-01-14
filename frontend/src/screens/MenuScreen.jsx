@@ -32,6 +32,8 @@ import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 import ProfileSidebar from "../components/Profile/ProfileSidebar";
 import DishReviewsModal from "../components/Menu/DishReviewsModal";
 import PaymentModal from "../components/Payment/PaymentModal";
+import RecommendationsSection from "../components/Menu/RecommendationsSection";
+
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -90,6 +92,10 @@ const MenuScreen = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalMenuItems, setTotalMenuItems] = useState(0);
 
+  // Recommendations State
+  const [highlightedDishId, setHighlightedDishId] = useState(null);
+
+
   // Fetch categories and avatar (chỉ 1 lần khi mount)
   useEffect(() => {
     // Kiểm tra đã login và có thông tin bàn chưa
@@ -119,9 +125,7 @@ const MenuScreen = () => {
           setActiveOrderTotal(
             activeOrder.totalPrice || activeOrder.total_amount || 50000
           ); // Demo default value if missing
-          console.log("✅ Found active order:", activeOrder.orderId);
-          // NOTE: We do NOT load active items into 'cart' to avoid double-ordering.
-          // 'cart' state represents ONLY the local/draft items not yet submitted.
+          
         }
       } catch (error) {
         console.error("Failed to load active order:", error);
@@ -681,9 +685,7 @@ const MenuScreen = () => {
               >
                 <MenuItem
                   product={product}
-                  onAdd={(productWithModifiers) =>
-                    addToCart(productWithModifiers)
-                  }
+                  onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
                   onImageClick={(product) => setGalleryProduct(product)}
                   onShowReviews={(product) =>
                     setSelectedDishForReviews({
@@ -713,6 +715,33 @@ const MenuScreen = () => {
             pageSizeOptions={[12, 24, 36, 48]}
           />
         )}
+
+
+        {/* 🆕 Recommendations Section - DEPRECATED: Moved to dropdown button in MenuItem */}
+        {/* {highlightedDishId && !isLoadingMenu && (
+          <div className="px-4 md:px-6 pb-6">
+            <RecommendationsSection
+              currentDishId={highlightedDishId}
+              onAddToCart={(productWithModifiers) => {
+                addToCart(productWithModifiers);
+              }}
+              onImageClick={(product) => {
+                setGalleryProduct(product);
+                setHighlightedDishId(product.id);
+              }}
+              onShowReviews={(product) =>
+                setSelectedDishForReviews({
+                  id: product.id,
+                  name: product.name,
+                  image:
+                    product.photos?.find((p) => p.isPrimary)?.url ||
+                    product.imgUrl,
+                  rating: product.rating,
+                })
+              }
+            />
+          </div>
+        )} */}
       </div>
 
       {!isCartOpen && totalItems > 0 && (

@@ -516,6 +516,42 @@ export const fetchOrdersByTable = async (tableId) => {
   }
 };
 
+/**
+ * Fetch recommended dishes for a specific dish
+ * GET /api/menus/:dishId/recommendations?limit=6
+ * @param {number} dishId - Dish ID
+ * @param {number} limit - Number of recommendations (default: 6)
+ * @returns {Promise<Array>} Array of recommended dishes
+ */
+export const fetchRecommendedDishes = async (dishId, limit = 6) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/api/menus/${dishId}/recommendations?limit=${limit}`,
+      {
+        headers: getHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Fetch chi tiết (photos, modifiers) cho từng món gợi ý
+      const dishesWithDetails = await Promise.all(
+        result.data.map((dish) => fetchDishDetails(dish))
+      );
+      return dishesWithDetails;
+    }
+    return [];
+  } catch (error) {
+    console.error(`Fetch recommendations for dish ${dishId} error:`, error);
+    return [];
+  }
+};
+
 // ==================== EXPORTS ====================
 
 export default {
@@ -531,6 +567,7 @@ export default {
   fetchDishDetails,
   // Menus
   fetchMenus,
+  fetchRecommendedDishes,
   // Orders
   submitOrder,
   getActiveOrder,

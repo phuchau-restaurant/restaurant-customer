@@ -142,6 +142,61 @@ class MenusService {
     await this.getMenuById(id, tenantId); // Check quyền sở hữu
     return await this.menusRepo.delete(id);
   }
+
+  /**
+   * Get recommended dishes for a specific dish
+   * @param {number} dishId - Dish ID
+   * @param {string} tenantId - Tenant ID
+   * @param {number} limit - Number of recommendations
+   * @returns {Promise<Array>} Recommended dishes with ratings
+   */
+  async getRecommendedDishes(dishId, tenantId, limit = 6) {
+    try {
+      // Validate dishId
+      if (!dishId) {
+        throw new Error("Dish ID is required");
+      }
+
+      if (!tenantId) {
+        throw new Error("Tenant ID is required");
+      }
+
+      // Get recommendations from repository
+      const recommendations = await this.menusRepo.getRecommendedDishes(
+        dishId,
+        tenantId,
+        limit
+      );
+
+      // Populate ratings (same pattern as getMenusByTenant)
+      if (recommendations.length > 0 && this.dishRatingsRepo) {
+        try {
+          const dishIds = recommendations.map(dish => dish.id);
+          const ratings = await this.dishRatingsRepo.getByDishIds(dishIds);
+          
+          const ratingsMap = {};
+          ratings.forEach(r => {
+            ratingsMap[r.dishId] = r;
+          });
+
+          recommendations.forEach(dish => {
+            dish.rating = ratingsMap[dish.id] || { totalReviews: 0, averageRating: 0 };
+          });
+        } catch (error) {
+          console.error("[MenusService] Error fetching ratings for recommendations:", error);
+          // Non-blocking, continue without ratings
+          recommendations.forEach(dish => {
+            dish.rating = { totalReviews: 0, averageRating: 0 };
+          });
+        }
+      }
+
+      return recommendations;
+    } catch (error) {
+      console.error(`[MenusService] Get recommendations for dish ${dishId} failed:`, error);
+      throw error;
+    }
+  }
 }
 
 export default MenusService;

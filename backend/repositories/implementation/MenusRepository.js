@@ -176,4 +176,46 @@ async getById(id) {
     
     return data.map(item => new Menus(item)); 
   }
+
+  /**
+   * Get recommended dishes for a specific dish
+   * Logic: 
+   * 1. Lấy các món cùng danh mục (trừ món hiện tại)
+   * 2. Ưu tiên món phổ biến (order_count cao)
+   * NOTE: Ratings sẽ được populate ở Service layer
+   * 
+   * @param {number} dishId - ID of current dish
+   * @param {string} tenantId - Tenant ID
+   * @param {number} limit - Number of recommendations (default: 6)
+   * @returns {Promise<Array>} Array of recommended dishes (without ratings)
+   */
+  async getRecommendedDishes(dishId, tenantId, limit = 6) {
+    try {
+      // 1. Lấy thông tin món hiện tại
+      const currentDish = await this.getById(dishId);
+      if (!currentDish) {
+        throw new Error("Dish not found");
+      }
+
+      // 2. Query gợi ý: Cùng danh mục + sắp xếp theo độ phổ biến
+      const { data, error } = await supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('category_id', currentDish.categoryId)  // Cùng danh mục
+        .eq('is_available', true)                    // Chỉ món đang bán
+        .neq('id', dishId)                           // Trừ món hiện tại
+        .order('order_count', { ascending: false })  // Ưu tiên món phổ biến
+        .order('id', { ascending: false })           // Món mới thêm nếu order_count bằng nhau
+        .limit(limit);
+
+      if (error) throw new Error(`[Menus] GetRecommendedDishes failed: ${error.message}`);
+
+      // 3. Map sang Model (ratings sẽ được thêm ở Service layer)
+      return data.map(dish => new Menus(dish));
+    } catch (error) {
+      console.error("[MenusRepository] Error in getRecommendedDishes:", error);
+      throw error;
+    }
+  }
 }

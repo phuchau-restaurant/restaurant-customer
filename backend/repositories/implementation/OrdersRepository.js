@@ -43,8 +43,18 @@ export class OrdersRepository extends BaseRepository {
   }
   
   async update(id, updates) {
-    const entity = new Orders(updates);
-    const dbPayload = entity.toPersistence();
+    // Manual mapping to avoid Model defaults overwriting existing data (e.g. total_amount -> 0)
+    const dbPayload = { ...updates };
+
+    // Map camelCase to snake_case if necessary
+    if (updates.tenantId) { dbPayload.tenant_id = updates.tenantId; delete dbPayload.tenantId; }
+    if (updates.tableId) { dbPayload.table_id = updates.tableId; delete dbPayload.tableId; }
+    if (updates.customerId) { dbPayload.customer_id = updates.customerId; delete dbPayload.customerId; }
+    if (updates.totalAmount !== undefined) { dbPayload.total_amount = updates.totalAmount; delete dbPayload.totalAmount; }
+    if (updates.createdAt) { dbPayload.created_at = updates.createdAt; delete dbPayload.createdAt; }
+    if (updates.completedAt) { dbPayload.completed_at = updates.completedAt; delete dbPayload.completedAt; }
+    
+    // Clean undefined
     Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
 
     const rawData = await super.update(id, dbPayload);

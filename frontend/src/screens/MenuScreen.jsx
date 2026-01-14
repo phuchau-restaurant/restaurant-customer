@@ -3,7 +3,16 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomer } from "../contexts/CustomerContext";
 import { motion } from "framer-motion";
-import { ShoppingCart, Utensils, LogOut, Search, Filter, ArrowUpDown, X, ChevronDown } from "lucide-react";
+import {
+  ShoppingCart,
+  Utensils,
+  LogOut,
+  Search,
+  Filter,
+  ArrowUpDown,
+  X,
+  ChevronDown,
+} from "lucide-react";
 import MenuItem from "../components/Menu/MenuItem";
 import CartItem from "../components/Cart/CartItem";
 import AlertModal from "../components/Modal/AlertModal";
@@ -22,6 +31,7 @@ import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
 import ProfileSidebar from "../components/Profile/ProfileSidebar";
 import DishReviewsModal from "../components/Menu/DishReviewsModal";
+import PaymentModal from "../components/Payment/PaymentModal";
 
 const MenuScreen = () => {
   const navigate = useNavigate();
@@ -35,17 +45,17 @@ const MenuScreen = () => {
       let currentTableId = null;
       const storedTable = sessionStorage.getItem("tableInfo");
       if (storedTable) {
-          const parsed = JSON.parse(storedTable);
-          currentTableId = parsed.id;
+        const parsed = JSON.parse(storedTable);
+        currentTableId = parsed.id;
       }
-      
+
       if (!currentTableId) return [];
-      
+
       const localCart = localStorage.getItem(`cart_${currentTableId}`);
       return localCart ? JSON.parse(localCart) : [];
     } catch (error) {
-       console.error("Error loading cart from LS:", error);
-       return [];
+      console.error("Error loading cart from LS:", error);
+      return [];
     }
   };
 
@@ -65,6 +75,8 @@ const MenuScreen = () => {
 
   // Active Order State (for session-based cart)
   const [activeOrderId, setActiveOrderId] = useState(null);
+  const [activeOrderTotal, setActiveOrderTotal] = useState(0);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,27 +102,31 @@ const MenuScreen = () => {
     // Load initial data (categories + avatars only)
     const loadInitialData = async () => {
       // Fetch categories
-      const { categories: cats, categoryIdMap: idMap } = await fetchCategories();
+      const { categories: cats, categoryIdMap: idMap } =
+        await fetchCategories();
       setCategories(cats);
       setCategoryIdMap(idMap);
 
       // Fetch avatar URLs
       const avatars = await fetchAvatarUrls();
       setAvatarUrl(avatars);
-      
+
       // Load active order for this table (to knowing where to add new items)
       try {
         const activeOrder = await getActiveOrder(tableInfo.id);
         if (activeOrder && activeOrder.orderId) {
           setActiveOrderId(activeOrder.orderId);
-          console.log('✅ Found active order:', activeOrder.orderId);
+          setActiveOrderTotal(
+            activeOrder.totalPrice || activeOrder.total_amount || 50000
+          ); // Demo default value if missing
+          console.log("✅ Found active order:", activeOrder.orderId);
           // NOTE: We do NOT load active items into 'cart' to avoid double-ordering.
           // 'cart' state represents ONLY the local/draft items not yet submitted.
         }
       } catch (error) {
-        console.error('Failed to load active order:', error);
+        console.error("Failed to load active order:", error);
       }
-      
+
       // Đánh dấu đã load xong categories
       setIsInitialLoad(false);
     };
@@ -120,22 +136,23 @@ const MenuScreen = () => {
 
   // Save cart to LS on change
   useEffect(() => {
-      if (tableInfo?.id) {
-          localStorage.setItem(`cart_${tableInfo.id}`, JSON.stringify(cart));
-      }
+    if (tableInfo?.id) {
+      localStorage.setItem(`cart_${tableInfo.id}`, JSON.stringify(cart));
+    }
   }, [cart, tableInfo?.id]);
 
   // Fetch menus based on active category (chỉ sau khi đã có categories)
   useEffect(() => {
     // Chờ cho đến khi categories đã load xong
     if (isInitialLoad) return;
-    
+
     const loadMenusByCategory = async () => {
       setIsLoadingMenu(true);
       try {
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
-        const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
-        
+        const categoryId =
+          activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
+
         // All filtering is now done server-side, always use pagination
         const result = await fetchMenus({
           categoryId,
@@ -143,14 +160,14 @@ const MenuScreen = () => {
           activeCategory,
           pageNumber: currentPage,
           pageSize: pageSize,
-          sortBy: sortBy === 'default' ? null : sortBy,
+          sortBy: sortBy === "default" ? null : sortBy,
           isRecommended,
           searchQuery: searchQuery || null,
-          priceRange: priceFilter === 'all' ? null : priceFilter,
+          priceRange: priceFilter === "all" ? null : priceFilter,
         });
-        
+
         // Handle paginated response
-        if (result && typeof result === 'object' && 'products' in result) {
+        if (result && typeof result === "object" && "products" in result) {
           setProducts(result.products);
           setTotalPages(result.totalPages || 1);
           setTotalMenuItems(result.total || 0);
@@ -171,7 +188,35 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter, isRecommended]);
+  }, [
+    activeCategory,
+    categoryIdMap,
+    categories,
+    isInitialLoad,
+    currentPage,
+    pageSize,
+    searchQuery,
+    sortBy,
+    priceFilter,
+    isRecommended,
+  ]);
+
+  // Re-fetch active order when Cart opens to ensure data consistency
+  useEffect(() => {
+    if (isCartOpen && tableInfo?.id) {
+      getActiveOrder(tableInfo.id)
+        .then((order) => {
+          if (order && order.orderId) {
+            setActiveOrderId(order.orderId);
+            // If backend doesn't return total, keep existing or use fallback
+            if (order.totalPrice || order.total_amount) {
+              setActiveOrderTotal(order.totalPrice || order.total_amount);
+            }
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isCartOpen, tableInfo?.id]);
 
   // All filtering and sorting is now handled by backend
   const filteredAndSortedProducts = useMemo(() => {
@@ -181,7 +226,7 @@ const MenuScreen = () => {
   // Pagination Handlers
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handlePageSizeChange = (newSize) => {
@@ -199,31 +244,39 @@ const MenuScreen = () => {
     try {
       // Get customerId from customer context
       const customerId = customer?.customerId || customer?.id;
-      
+
       if (!customerId) {
         showError("Vui lòng đăng nhập để đặt món!");
         return;
       }
 
+      // Calculate cart total to update local state logic
+      const cartTotal = cart.reduce(
+        (sum, item) => sum + (item.totalPrice || item.price) * item.qty,
+        0
+      );
+
       if (activeOrderId) {
         // Add to existing order
-        console.log('📦 Adding items to existing order:', activeOrderId);
+        console.log("📦 Adding items to existing order:", activeOrderId);
         await addItemsToOrder(activeOrderId, cart);
+        setActiveOrderTotal((prev) => prev + cartTotal);
         showSuccess(`Đã thêm ${cart.length} món vào đơn hàng!`);
       } else {
         // Create new order
-        console.log('📝 Creating new order');
+        console.log("📝 Creating new order");
         const newOrder = await submitOrder({
           tableId: tableInfo.id,
           customerId: customerId,
           dishes: cart,
         });
-        
+
         // Save the new order ID for subsequent additions
         if (newOrder.orderId) {
           setActiveOrderId(newOrder.orderId);
+          setActiveOrderTotal(cartTotal);
         }
-        
+
         showSuccess("Đặt món thành công!");
       }
 
@@ -238,14 +291,14 @@ const MenuScreen = () => {
   const handleLogout = () => {
     // 1. Clear local states
     if (tableInfo?.id) {
-        localStorage.removeItem(`cart_${tableInfo.id}`);
+      localStorage.removeItem(`cart_${tableInfo.id}`);
     }
     setCart([]);
     setActiveOrderId(null);
-    
+
     // 2. Call context logout
     logout();
-    
+
     // 3. Navigate
     setTimeout(() => {
       navigate("/goodbye", { replace: true });
@@ -255,7 +308,7 @@ const MenuScreen = () => {
   const displayAvatar = useMemo(() => {
     // 1. Use customer's avatar if available
     if (customer?.avatar) return customer.avatar;
-    
+
     // 2. Use first avatar from app settings if available
     if (avatarUrl && avatarUrl.length > 0) return avatarUrl[0];
 
@@ -276,16 +329,19 @@ const MenuScreen = () => {
   const addToCart = (product) => {
     setCart((prev) => {
       // Tạo unique key từ product id + modifiers để phân biệt cùng món nhưng khác modifiers
-      const modifiersKey = product.selectedModifiers
-        ?.map((m) => m.optionId)
-        .sort()
-        .join("-") || "";
+      const modifiersKey =
+        product.selectedModifiers
+          ?.map((m) => m.optionId)
+          .sort()
+          .join("-") || "";
       const cartItemKey = `${product.id}-${modifiersKey}`;
-      
+
       const existing = prev.find((item) => item.cartItemKey === cartItemKey);
       if (existing) {
         return prev.map((item) =>
-          item.cartItemKey === cartItemKey ? { ...item, qty: item.qty + 1 } : item
+          item.cartItemKey === cartItemKey
+            ? { ...item, qty: item.qty + 1 }
+            : item
         );
       }
       return [
@@ -374,7 +430,7 @@ const MenuScreen = () => {
       {/* Sidebar - Hidden on mobile, slide in when open */}
       <motion.div
         className={`fixed lg:relative w-30 bg-white border-r flex flex-col items-center py-6 space-y-4 shadow-lg lg:shadow-sm z-40 h-full transition-transform duration-300 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -407,9 +463,8 @@ const MenuScreen = () => {
             }}
             className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-300 ${
               activeCategory === cat.id
-                  ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105"
-                  : "text-gray-400"
-
+                ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-300/50 scale-105"
+                : "text-gray-400"
             }`}
           >
             <div className="mb-1">
@@ -450,7 +505,7 @@ const MenuScreen = () => {
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="lg:hidden"
               />
-              
+
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-4 md:px-5 py-2 md:py-3 rounded-full shadow-md text-sm md:text-md font-bold text-white">
                 Bàn: {tableInfo?.number || "..."}
               </div>
@@ -458,7 +513,7 @@ const MenuScreen = () => {
 
             {/* Right: Customer Info */}
             <div className="flex items-center gap-2 md:gap-3 bg-gray-50 rounded-full pl-2 md:pl-3 pr-2 py-2 border border-gray-200 w-full sm:w-auto">
-              <button 
+              <button
                 onClick={() => setIsProfileOpen(true)}
                 className="relative hover:scale-105 transition-transform cursor-pointer"
               >
@@ -528,8 +583,14 @@ const MenuScreen = () => {
                 <option value="50-100">50k - 100k</option>
                 <option value="above-100">Trên 100k</option>
               </select>
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+              <Filter
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={16}
+              />
+              <ChevronDown
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={14}
+              />
             </div>
 
             {/* Sort By - 25% width */}
@@ -546,11 +607,17 @@ const MenuScreen = () => {
                 <option value="name-desc">Tên (Z-A)</option>
                 <option value="popular">Phổ biến nhất</option>
               </select>
-              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+              <ArrowUpDown
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={16}
+              />
+              <ChevronDown
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={14}
+              />
             </div>
-            
-             {/* Chef Recommended Toggle */}
+
+            {/* Chef Recommended Toggle */}
             <button
               onClick={() => setIsRecommended(!isRecommended)}
               className={`px-4 py-2 flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors border whitespace-nowrap ${
@@ -566,7 +633,7 @@ const MenuScreen = () => {
         </motion.div>
 
         <motion.div
-  // ...
+          // ...
 
           className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
@@ -587,20 +654,20 @@ const MenuScreen = () => {
             </div>
           ) : filteredAndSortedProducts.length === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
-               <div className="bg-gray-100 p-4 rounded-full mb-3">
-                 <Search size={32} className="text-gray-400" />
-               </div>
-               <p className="font-medium">Không tìm thấy món nào</p>
-               <button 
-                 onClick={() => {
-                   setSearchQuery("");
-                   setPriceFilter("all");
-                   setSortBy("default");
-                 }}
-                 className="mt-2 text-sm text-orange-500 hover:underline"
-               >
-                 Xóa bộ lọc
-               </button>
+              <div className="bg-gray-100 p-4 rounded-full mb-3">
+                <Search size={32} className="text-gray-400" />
+              </div>
+              <p className="font-medium">Không tìm thấy món nào</p>
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setPriceFilter("all");
+                  setSortBy("default");
+                }}
+                className="mt-2 text-sm text-orange-500 hover:underline"
+              >
+                Xóa bộ lọc
+              </button>
             </div>
           ) : (
             filteredAndSortedProducts.map((product, index) => (
@@ -614,14 +681,20 @@ const MenuScreen = () => {
               >
                 <MenuItem
                   product={product}
-                  onAdd={(productWithModifiers) => addToCart(productWithModifiers)}
+                  onAdd={(productWithModifiers) =>
+                    addToCart(productWithModifiers)
+                  }
                   onImageClick={(product) => setGalleryProduct(product)}
-                  onShowReviews={(product) => setSelectedDishForReviews({
-                    id: product.id,
-                    name: product.name,
-                    image: product.photos?.find((p) => p.isPrimary)?.url || product.imgUrl,
-                    rating: product.rating
-                  })}
+                  onShowReviews={(product) =>
+                    setSelectedDishForReviews({
+                      id: product.id,
+                      name: product.name,
+                      image:
+                        product.photos?.find((p) => p.isPrimary)?.url ||
+                        product.imgUrl,
+                      rating: product.rating,
+                    })
+                  }
                 />
               </motion.div>
             ))
@@ -629,8 +702,7 @@ const MenuScreen = () => {
         </motion.div>
 
         {/* Pagination Component - Always show when there are results */}
-        {!isLoadingMenu && 
-         filteredAndSortedProducts.length > 0 && (
+        {!isLoadingMenu && filteredAndSortedProducts.length > 0 && (
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -690,13 +762,14 @@ const MenuScreen = () => {
           )}
         </div>
 
-        <div className="p-6 bg-gray-50 border-t">
-          <div className="flex justify-between items-center mb-4">
+        <div className="p-6 bg-gray-50 border-t space-y-3">
+          <div className="flex justify-between items-center">
             <span className="text-gray-500">Tổng cộng</span>
             <span className="text-2xl font-bold text-gray-800">
               {totalAmount.toLocaleString("vi-VN")}₫
             </span>
           </div>
+
           <button
             className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 ${
               cart.length > 0
@@ -706,7 +779,7 @@ const MenuScreen = () => {
             disabled={cart.length === 0}
             onClick={handleSubmitOrder}
           >
-            Đặt món ngay
+            {activeOrderId ? "Gọi thêm món" : "Đặt món ngay"}
           </button>
         </div>
       </div>
@@ -738,12 +811,28 @@ const MenuScreen = () => {
         customer={displayCustomer}
         currentAvatar={displayAvatar}
       />
-      
+
       {/* Dish Reviews Modal - Full Screen */}
       <DishReviewsModal
         isOpen={!!selectedDishForReviews}
         onClose={() => setSelectedDishForReviews(null)}
         dish={selectedDishForReviews}
+      />
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        orderId={activeOrderId}
+        totalAmount={activeOrderTotal}
+        onPaymentSuccess={() => {
+          setIsPaymentModalOpen(false);
+          setActiveOrderId(null);
+          setActiveOrderTotal(0);
+          showSuccess("Thanh toán thành công! Cảm ơn quý khách.");
+          // Navigate to goodbye or reset logic
+          setTimeout(() => window.location.reload(), 1500); // Reload to reset state fully
+        }}
       />
     </motion.div>
   );

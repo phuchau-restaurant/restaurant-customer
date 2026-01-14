@@ -47,6 +47,22 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
         
         return { ...prev, [groupId]: newSelected };
       }
+      
+      // Nếu đang chọn thêm (select)
+      // Check max_selections limit
+      if (currentSelected.length >= maxSelections) {
+        // Nếu maxSelections = 1, thay thế option cũ (radio behavior)
+        if (maxSelections === 1) {
+          return { ...prev, [groupId]: [optionId] };
+        }
+        // Nếu maxSelections > 1 và đã đạt giới hạn, hiển thị warning
+        setLimitWarning(`Bạn chỉ có thể chọn tối đa ${maxSelections} tùy chọn cho "${group.name}"`);
+        setTimeout(() => setLimitWarning(null), 3000);
+        return prev;
+      }
+      
+      // Chọn thêm option mới
+      return { ...prev, [groupId]: [...currentSelected, optionId] };
     });
   };
 
@@ -246,6 +262,13 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
             <p className="text-gray-500 text-md line-clamp-2 font-assistant">
               {product.description}
             </p>
+          )}
+          
+          {/* Warning Message */}
+          {limitWarning && (
+            <div className="mt-3 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-2 rounded-lg text-sm font-medium animate-pulse">
+              ⚠️ {limitWarning}
+            </div>
           )}
           
           {/* Modifier Groups */}

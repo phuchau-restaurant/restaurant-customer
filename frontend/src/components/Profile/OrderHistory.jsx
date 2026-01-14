@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
   Clock,
   CheckCircle,
@@ -11,14 +11,21 @@ import {
   DollarSign,
   Package,
   AlertCircle,
-} from 'lucide-react';
-import { getOrdersByCustomerId } from '../../services/orderService';
+  CreditCard,
+} from "lucide-react";
+import { getOrdersByCustomerId } from "../../services/orderService";
+import PaymentModal from "../Payment/PaymentModal";
+import AlertModal from "../Modal/AlertModal";
+import { useAlert } from "../../hooks/useAlert";
 
 const OrderHistory = ({ customer }) => {
   const [orders, setOrders] = useState([]);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
+  const { alert, showSuccess, closeAlert } = useAlert();
 
   // Fetch orders when component mounts or customer changes
   useEffect(() => {
@@ -36,8 +43,8 @@ const OrderHistory = ({ customer }) => {
         const data = await getOrdersByCustomerId(customerId);
         setOrders(data);
       } catch (err) {
-        console.error('Error fetching orders:', err);
-        setError('Không thể tải lịch sử đơn hàng. Vui lòng thử lại.');
+        console.error("Error fetching orders:", err);
+        setError("Không thể tải lịch sử đơn hàng. Vui lòng thử lại.");
       } finally {
         setIsLoading(false);
       }
@@ -48,71 +55,71 @@ const OrderHistory = ({ customer }) => {
 
   const getStatusConfig = (status) => {
     // Map backend status to display config
-    const statusLower = status?.toLowerCase() || '';
-    
+    const statusLower = status?.toLowerCase() || "";
+
     const configs = {
       completed: {
-        label: 'Hoàn thành',
+        label: "Hoàn thành",
         icon: CheckCircle,
-        color: 'text-green-600',
-        bg: 'bg-green-50',
-        border: 'border-green-200',
+        color: "text-green-600",
+        bg: "bg-green-50",
+        border: "border-green-200",
       },
       served: {
-        label: 'Đã phục vụ',
+        label: "Đã phục vụ",
         icon: CheckCircle,
-        color: 'text-green-600',
-        bg: 'bg-green-50',
-        border: 'border-green-200',
+        color: "text-green-600",
+        bg: "bg-green-50",
+        border: "border-green-200",
       },
       approved: {
-        label: 'Đã duyệt',
+        label: "Đã duyệt",
         icon: CheckCircle,
-        color: 'text-blue-600',
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
+        color: "text-blue-600",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
       },
       pending: {
-        label: 'Đang xử lý',
+        label: "Đang xử lý",
         icon: Loader,
-        color: 'text-blue-600',
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
+        color: "text-blue-600",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
       },
       unsubmit: {
-        label: 'Chưa gửi',
+        label: "Chưa gửi",
         icon: Clock,
-        color: 'text-gray-600',
-        bg: 'bg-gray-50',
-        border: 'border-gray-200',
+        color: "text-gray-600",
+        bg: "bg-gray-50",
+        border: "border-gray-200",
       },
       cancelled: {
-        label: 'Đã hủy',
+        label: "Đã hủy",
         icon: XCircle,
-        color: 'text-red-600',
-        bg: 'bg-red-50',
-        border: 'border-red-200',
+        color: "text-red-600",
+        bg: "bg-red-50",
+        border: "border-red-200",
       },
     };
     return configs[statusLower] || configs.pending;
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
     }).format(amount);
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '';
+    if (!dateString) return "";
     const date = new Date(dateString);
-    return date.toLocaleString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("vi-VN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -195,32 +202,59 @@ const OrderHistory = ({ customer }) => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-700">
                     <DollarSign className="w-5 h-5 text-orange-500" />
-                    <span className="font-bold text-lg">{formatCurrency(order.totalAmount)}</span>
+                    <span className="font-bold text-lg">
+                      {formatCurrency(order.totalAmount)}
+                    </span>
                   </div>
-                  <button
-                    onClick={() => setExpandedOrder(isExpanded ? null : order.orderId)}
-                    className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-medium text-sm"
-                  >
-                    Chi tiết
-                    {isExpanded ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setExpandedOrder(isExpanded ? null : order.orderId)
+                      }
+                      className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-medium text-sm"
+                    >
+                      Chi tiết
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Payment Button - Only show for unpaid orders */}
+                {["unsubmit", "approved", "pending", "served"].includes(
+                  order.status?.toLowerCase()
+                ) && (
+                  <div className="mt-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedOrderForPayment(order);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-lg font-bold hover:from-pink-600 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Thanh toán MOMO
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Order Details */}
               {isExpanded && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
+                  animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   className="border-t border-gray-100 bg-gray-50"
                 >
                   <div className="p-4 space-y-3">
-                    <h5 className="font-semibold text-gray-800 mb-2">Món đã đặt:</h5>
+                    <h5 className="font-semibold text-gray-800 mb-2">
+                      Món đã đặt:
+                    </h5>
                     {order.items?.map((item, idx) => (
                       <div
                         key={idx}
@@ -228,8 +262,12 @@ const OrderHistory = ({ customer }) => {
                       >
                         <div className="flex items-start justify-between mb-1">
                           <div className="flex-1">
-                            <p className="font-medium text-gray-700">{item.dishName}</p>
-                            <p className="text-sm text-gray-500">Số lượng: {item.quantity}</p>
+                            <p className="font-medium text-gray-700">
+                              {item.dishName}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Số lượng: {item.quantity}
+                            </p>
                             {item.note && (
                               <p className="text-xs text-gray-400 italic mt-1">
                                 Ghi chú: {item.note}
@@ -240,7 +278,7 @@ const OrderHistory = ({ customer }) => {
                             {formatCurrency(item.unitPrice * item.quantity)}
                           </p>
                         </div>
-                        
+
                         {/* Display Modifiers */}
                         {item.modifiers && item.modifiers.length > 0 && (
                           <div className="ml-4 mt-2 space-y-1">
@@ -271,6 +309,40 @@ const OrderHistory = ({ customer }) => {
           );
         })
       )}
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedOrderForPayment(null);
+        }}
+        orderId={selectedOrderForPayment?.orderId}
+        totalAmount={selectedOrderForPayment?.totalAmount}
+        onPaymentSuccess={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedOrderForPayment(null);
+          showSuccess("Thanh toán thành công!");
+          // Refresh orders list
+          const fetchOrders = async () => {
+            try {
+              const customerId = customer.customerId || customer.id;
+              const data = await getOrdersByCustomerId(customerId);
+              setOrders(data);
+            } catch (err) {
+              console.error("Error refreshing orders:", err);
+            }
+          };
+          fetchOrders();
+        }}
+      />
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+      />{" "}
     </div>
   );
 };

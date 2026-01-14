@@ -5,6 +5,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import http from "http";
+import { initSocket } from "./configs/socket.js";
 
 // Import các routes
 import { connectDatabase } from "./configs/database.js";
@@ -20,6 +22,7 @@ import tokensRoutes from "./routers/tokens.routes.js";
 import uploadRoutes from "./routers/upload.routes.js";
 import reviewsRoutes from "./routers/reviews.routes.js";
 import dishRatingsRoutes from "./routers/dishRatings.routes.js";
+import paymentRoutes from "./routers/payment.routes.js";
 
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
@@ -31,7 +34,11 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, ".env") }); // Load from backend/.env
 
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Init Socket
+initSocket(httpServer);
 
 // --- MIDDLEWARE ---
 // Cấu hình CORS chặt chẽ để fix lỗi "credentials mode is include"
@@ -57,6 +64,7 @@ app.use("/api/appsettings", appSettingsRoutes);
 app.use("/api/upload", uploadRoutes); // Upload routes
 app.use("/api/reviews", reviewsRoutes); // Reviews routes
 app.use("/api/dish-ratings", dishRatingsRoutes); // Dish ratings routes
+app.use("/api/payment", paymentRoutes); // Payment Routes
 app.use("/api", modifiersRoutes); // This catches all /api/* routes
 app.use("/api/menu-item-modifier-group", menuItemModifierGroupRoutes);
 app.use("/api/items", menuItemPhotoRoutes);
@@ -75,8 +83,9 @@ const startServer = async () => {
   await connectDatabase();
 
   // 2. Chạy server
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`\n✅ Server đang chạy tại: http://localhost:${PORT}`);
+    console.log(`🔌 Socket.IO initialized`);
   });
 };
 

@@ -28,4 +28,4 @@ const ordersService = new OrdersService(
 // 3. Tiêm vào Controller
 const ordersController = new OrdersController(ordersService);
 
-export { ordersController };
+export { ordersController, ordersRepo as ordersRepository };

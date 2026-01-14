@@ -80,4 +80,33 @@ export class OrdersRepository extends BaseRepository {
     if (error) throw new Error(`[Orders] GetByCustomerId failed: ${error.message}`);
     return data.map(item => new Orders(item));
   }
+
+  /**
+   * Get active (UNSUBMIT) order for a table
+   * This is used to find if there's already an open order for the table
+   * @param {number} tableId - Table ID
+   * @param {string} tenantId - Tenant ID for security check
+   * @returns {Promise<Orders|null>} Active order or null
+   */
+  async getActiveOrderByTable(tableId, tenantId) {
+    let query = supabase
+      .from(this.tableName)
+      .select("*")
+      .eq('table_id', tableId)
+      .eq('status', 'Unsubmit'); // Only get UNSUBMIT orders
+    
+    // Add tenant filter for security
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    
+    // Get most recent first
+    query = query.order('created_at', { ascending: false }).limit(1);
+
+    const { data, error } = await query;
+    if (error) throw new Error(`[Orders] GetActiveOrderByTable failed: ${error.message}`);
+    
+    // Return the first (most recent) active order or null
+    return data && data.length > 0 ? new Orders(data[0]) : null;
+  }
 }

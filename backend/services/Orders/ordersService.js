@@ -145,6 +145,127 @@ class OrdersService {
     };
   }
 
+  /**
+   * Add items to an existing UNSUBMIT order
+   * This allows customers to continue adding dishes to their active order
+   * @param {number} orderId - Existing order ID
+   * @param {string} tenantId - Tenant ID for security
+   * @param {Array} dishes - Array of dishes to add
+   * @returns {Promise<Object>} Updated order with new items
+   */
+  async addItemsToExistingOrder(orderId, tenantId, dishes) {
+    if (!orderId) throw new Error("Order ID is required");
+    if (!dishes || !Array.isArray(dishes) || dishes.length === 0) {
+      throw new Error("Must provide at least one dish to add");
+    }
+
+    // 1. Verify order exists and is UNSUBMIT
+    const existingOrder = await this.getOrderById(orderId, tenantId);
+    if (existingOrder.order.status !== 'Unsubmit') {
+      throw new Error("Can only add items to UNSUBMIT orders");
+    }
+
+    // 2. Calculate new items
+    let additionalAmount = 0;
+    let additionalPrepTime = 0;
+    const newDetailsToCreate = [];
+
+    for (const dish of dishes) {
+      const { dishId, quantity, description, modifiers } = dish;
+      if (!dishId || quantity <= 0) continue;
+
+      // Fetch dish info
+      const menuItem = await this.menusRepo.getById(dishId);
+      if (!menuItem) throw new Error(`Dish with ID ${dishId} not found`);
+      if (menuItem.tenantId !== tenantId) {
+        throw new Error(`Dish ${dishId} does not belong to this tenant`);
+      }
+
+      const unitPrice = menuItem.price;
+
+      // Add prep time
+      if (menuItem.prepTimeMinutes) {
+        additionalPrepTime += menuItem.prepTimeMinutes * quantity;
+      }
+
+      // Increment order count
+      try {
+        const currentCount = menuItem.orderCount || 0;
+        await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
+      } catch (err) {
+        console.error(`Failed to update order count for dish ${dishId}`, err);
+      }
+
+      // Calculate modifier prices
+      let modifierTotal = 0;
+      if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
+        for (const mod of modifiers) {
+          const modOption = await this.modifierOptionsRepo.getById(mod.optionId);
+          if (modOption) {
+            modifierTotal += Number(modOption.price);
+            mod.optionName = modOption.name;
+            mod.price = Number(modOption.price);
+          } else {
+            mod.optionName = "Unknown Option";
+          }
+        }
+      }
+
+      const subTotal = (unitPrice + modifierTotal) * quantity;
+      additionalAmount += subTotal;
+
+      newDetailsToCreate.push({
+        tenantId,
+        orderId,
+        dishId,
+        quantity,
+        unitPrice,
+        note: description,
+        status: null,
+        modifiers,
+      });
+    }
+
+    // 3. Create new order details
+    const finalDetailsPayload = newDetailsToCreate.map((detail) => {
+      const { modifiers, ...rest } = detail;
+      return rest;
+    });
+
+    const createdDetails = await this.orderDetailsRepo.createMany(finalDetailsPayload);
+
+    // 4. Save modifiers
+    const modifiersToCreate = [];
+    createdDetails.forEach((detail, index) => {
+      const originalDish = newDetailsToCreate[index];
+      if (originalDish.modifiers && Array.isArray(originalDish.modifiers)) {
+        originalDish.modifiers.forEach((mod) => {
+          modifiersToCreate.push({
+            orderDetailId: detail.id,
+            modifierOptionId: mod.optionId,
+            optionName: mod.optionName,
+          });
+        });
+      }
+    });
+
+    if (modifiersToCreate.length > 0) {
+      await this.orderItemModifiersRepo.createMany(modifiersToCreate);
+    }
+
+    // 5. Update order total and prep time
+    const updatedOrder = await this.ordersRepo.update(orderId, {
+      totalAmount: existingOrder.order.totalAmount + additionalAmount,
+      prepTimeOrder: (existingOrder.order.prepTimeOrder || 0) + additionalPrepTime,
+    });
+
+    return {
+      order: updatedOrder,
+      newItems: createdDetails,
+      message: `Added ${createdDetails.length} item(s) to order`,
+    };
+  }
+
   async getOrderById(id, tenantId) {
     const order = await this.ordersRepo.getById(id);
     if (!order) throw new Error("Order not found");
@@ -182,7 +303,7 @@ class OrdersService {
             id: dishInfo.id,
             name: dishInfo.name,
             categoryId: dishInfo.categoryId,
-            image: dishInfo.image,
+            image: dishInfo.imgUrl,  // Fixed: use imgUrl instead of image
             price: dishInfo.price,
           }
           : null,
@@ -794,6 +915,27 @@ class OrdersService {
     );
 
     return enrichedOrders;
+  }
+
+  /**
+   * Get active (UNSUBMIT) order for a table
+   * Used by frontend to check if there's an existing order to add items to
+   * @param {number} tableId - Table ID
+   * @param {string} tenantId - Tenant ID
+   * @returns {Promise<Object|null>} Active order with details or null
+   */
+  async getActiveOrder(tableId, tenantId) {
+    if (!tableId) throw new Error("Table ID is required");
+    if (!tenantId) throw new Error("Tenant ID is required");
+
+    const activeOrder = await this.ordersRepo.getActiveOrderByTable(tableId, tenantId);
+    
+    if (!activeOrder) {
+      return null;
+    }
+
+    // Get full order details
+    return await this.getOrderById(activeOrder.id, tenantId);
   }
 }
 export default OrdersService;

@@ -255,6 +255,95 @@ class OrdersController {
     }
   }
 
+  /**
+   * [GET] /api/orders/active?tableId=xxx
+   * Get active (UNSUBMIT) order for a table
+   */
+  getActiveOrder = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { tableId } = req.query;
+
+      if (!tableId) {
+        return res.status(400).json({
+          success: false,
+          message: "tableId is required"
+        });
+      }
+
+      const activeOrder = await this.ordersService.getActiveOrder(tableId, tenantId);
+
+      if (!activeOrder) {
+        return res.status(200).json({
+          success: true,
+          message: "No active order found for this table",
+          data: null
+        });
+      }
+
+      // Clean response
+      const { id: _oid, tenantId: _tid, ...orderData } = activeOrder.order;
+      const detailsData = activeOrder.details.map(d => {
+        const { id, tenantId, orderId, ...rest } = d;
+        return rest;
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Active order found",
+        data: {
+          orderId: activeOrder.order.id, // Include ID for subsequent operations
+          ...orderData,
+          items: detailsData
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * [PATCH] /api/orders/:id/items
+   * Add items to existing UNSUBMIT order
+   */
+  addItemsToOrder = async (req, res, next) => {
+    try {
+      const tenantId = req.tenantId;
+      const { id } = req.params;
+      const { dishes } = req.body;
+
+      if (!dishes || !Array.isArray(dishes) || dishes.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "dishes array is required and must not be empty"
+        });
+      }
+
+      const result = await this.ordersService.addItemsToExistingOrder(id, tenantId, dishes);
+
+      // Clean response
+      const { id: _oid, tenantId: _tid, ...orderData } = result.order;
+      const newItemsData = result.newItems.map(item => {
+        const { id, tenantId, orderId, ...rest } = item;
+        return rest;
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          orderId: result.order.id,
+          ...orderData,
+          newItems: newItemsData
+        }
+      });
+    } catch (error) {
+      if (error.message.includes("not found")) error.statusCode = 404;
+      if (error.message.includes("UNSUBMIT")) error.statusCode = 400;
+      next(error);
+    }
+  }
+
 }
 
 

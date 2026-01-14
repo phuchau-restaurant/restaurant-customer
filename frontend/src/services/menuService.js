@@ -410,6 +410,82 @@ export const submitOrder = async ({ tableId, customerId, dishes }) => {
 };
 
 /**
+ * Get active (UNSUBMIT) order for a table
+ * GET /api/orders/active?tableId=xxx
+ * @param {number} tableId - Table ID
+ * @returns {Promise<Object|null>} Active order or null
+ */
+export const getActiveOrder = async (tableId) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/api/orders/active?tableId=${tableId}`,
+      {
+        headers: getHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      return result.data; // null if no active order
+    }
+    return null;
+  } catch (error) {
+    console.error("Get active order error:", error);
+    return null;
+  }
+};
+
+/**
+ * Add items to existing order
+ * PATCH /api/orders/:id/items
+ * @param {number} orderId - Order ID
+ * @param {Array} dishes - Array of dishes to add
+ * @returns {Promise<Object>} Updated order
+ */
+export const addItemsToOrder = async (orderId, dishes) => {
+  try {
+    const payload = {
+      dishes: dishes.map((item) => ({
+        dishId: item.id,
+        quantity: item.qty,
+        description: item.name,
+        note: item.note?.trim() || null,
+        modifiers: item.selectedModifiers?.map((mod) => ({
+          groupId: mod.groupId,
+          optionId: mod.optionId,
+          price: mod.price
+        })) || []
+      })),
+    };
+
+    const response = await fetch(`${BASE_URL}/api/orders/${orderId}/items`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      return result.data;
+    }
+    throw new Error(result.message || "Failed to add items to order");
+  } catch (error) {
+    console.error("Add items to order error:", error);
+    throw error;
+  }
+};
+
+/**
  * Get orders by table ID
  * GET /api/orders?tableId=...
  * @param {number} tableId - Table ID
@@ -457,5 +533,7 @@ export default {
   fetchMenus,
   // Orders
   submitOrder,
+  getActiveOrder,
+  addItemsToOrder,
   fetchOrdersByTable,
 };

@@ -14,6 +14,8 @@ import {
   fetchMenus,
   fetchAvatarUrls,
   submitOrder,
+  getActiveOrder,
+  addItemsToOrder,
 } from "../services/menuService";
 import Pagination from "../components/Pagination/Pagination";
 import FloatingCartButton from "../components/Cart/FloatingCartButton";
@@ -26,8 +28,29 @@ const MenuScreen = () => {
   const { customer, tableInfo, logout, updateTable } = useCustomer();
   const { alert, showSuccess, showError, showWarning, closeAlert } = useAlert();
 
+  // Helper để lấy cart từ LS an toàn
+  const getSavedCart = () => {
+    try {
+      // Vì tableInfo có thể chưa update kịp từ context, ta thử lấy từ sessionStorage (nơi lưu tableInfo)
+      let currentTableId = null;
+      const storedTable = sessionStorage.getItem("tableInfo");
+      if (storedTable) {
+          const parsed = JSON.parse(storedTable);
+          currentTableId = parsed.id;
+      }
+      
+      if (!currentTableId) return [];
+      
+      const localCart = localStorage.getItem(`cart_${currentTableId}`);
+      return localCart ? JSON.parse(localCart) : [];
+    } catch (error) {
+       console.error("Error loading cart from LS:", error);
+       return [];
+    }
+  };
+
   const [activeCategory, setActiveCategory] = useState("0");
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(getSavedCart);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -39,6 +62,9 @@ const MenuScreen = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [selectedDishForReviews, setSelectedDishForReviews] = useState(null);
+
+  // Active Order State (for session-based cart)
+  const [activeOrderId, setActiveOrderId] = useState(null);
 
   // Search, Filter, Sort States
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,12 +98,32 @@ const MenuScreen = () => {
       const avatars = await fetchAvatarUrls();
       setAvatarUrl(avatars);
       
+      // Load active order for this table (to knowing where to add new items)
+      try {
+        const activeOrder = await getActiveOrder(tableInfo.id);
+        if (activeOrder && activeOrder.orderId) {
+          setActiveOrderId(activeOrder.orderId);
+          console.log('✅ Found active order:', activeOrder.orderId);
+          // NOTE: We do NOT load active items into 'cart' to avoid double-ordering.
+          // 'cart' state represents ONLY the local/draft items not yet submitted.
+        }
+      } catch (error) {
+        console.error('Failed to load active order:', error);
+      }
+      
       // Đánh dấu đã load xong categories
       setIsInitialLoad(false);
     };
 
     loadInitialData();
   }, []);
+
+  // Save cart to LS on change
+  useEffect(() => {
+      if (tableInfo?.id) {
+          localStorage.setItem(`cart_${tableInfo.id}`, JSON.stringify(cart));
+      }
+  }, [cart, tableInfo?.id]);
 
   // Fetch menus based on active category (chỉ sau khi đã có categories)
   useEffect(() => {
@@ -148,7 +194,7 @@ const MenuScreen = () => {
     setCurrentPage(1);
   }, [activeCategory]);
 
-  // Submit order handler
+  // Submit order handler (with active order support)
   const handleSubmitOrder = async () => {
     try {
       // Get customerId from customer context
@@ -159,13 +205,28 @@ const MenuScreen = () => {
         return;
       }
 
-      await submitOrder({
-        tableId: tableInfo.id,
-        customerId: customerId,
-        dishes: cart,
-      });
+      if (activeOrderId) {
+        // Add to existing order
+        console.log('📦 Adding items to existing order:', activeOrderId);
+        await addItemsToOrder(activeOrderId, cart);
+        showSuccess(`Đã thêm ${cart.length} món vào đơn hàng!`);
+      } else {
+        // Create new order
+        console.log('📝 Creating new order');
+        const newOrder = await submitOrder({
+          tableId: tableInfo.id,
+          customerId: customerId,
+          dishes: cart,
+        });
+        
+        // Save the new order ID for subsequent additions
+        if (newOrder.orderId) {
+          setActiveOrderId(newOrder.orderId);
+        }
+        
+        showSuccess("Đặt món thành công!");
+      }
 
-      showSuccess("Đặt món thành công!");
       setCart([]);
       setIsCartOpen(false);
     } catch (err) {
@@ -175,8 +236,17 @@ const MenuScreen = () => {
   };
 
   const handleLogout = () => {
+    // 1. Clear local states
+    if (tableInfo?.id) {
+        localStorage.removeItem(`cart_${tableInfo.id}`);
+    }
+    setCart([]);
+    setActiveOrderId(null);
+    
+    // 2. Call context logout
     logout();
-    // Small delay to ensure smooth transition
+    
+    // 3. Navigate
     setTimeout(() => {
       navigate("/goodbye", { replace: true });
     }, 100);

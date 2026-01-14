@@ -225,23 +225,47 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
         >
           {product.rating && product.rating.totalReviews > 0 ? (
             <>
-              <div className="flex items-center gap-1 bg-gradient-to-r from-yellow-50 to-orange-50 px-2 py-1 rounded-lg border border-yellow-200">
-                <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                <span className="text-sm font-bold text-yellow-700">
+              <div className="flex items-center gap-0.5 bg-gradient-to-r from-yellow-50 to-orange-50 px-2 py-1 rounded-lg border border-yellow-200">
+                {/* Render 5 stars */}
+                {[1, 2, 3, 4, 5].map((starIndex) => {
+                  const rating = parseFloat(product.rating.averageRating);
+                  const isFilled = starIndex <= Math.floor(rating);
+                  const isHalf = starIndex === Math.ceil(rating) && rating % 1 >= 0.5;
+                  
+                  return (
+                    <Star
+                      key={starIndex}
+                      className={`w-4 h-4 ${
+                        isFilled
+                          ? "fill-yellow-500 text-yellow-500"
+                          : isHalf
+                          ? "fill-yellow-300 text-yellow-500"
+                          : "fill-gray-200 text-gray-300"
+                      }`}
+                    />
+                  );
+                })}
+                <span className="text-xs font-bold text-yellow-700 ml-1">
                   {parseFloat(product.rating.averageRating).toFixed(1)}
                 </span>
               </div>
-              <span className="text-xs text-gray-600 font-medium underline decoration-dotted">
+              <span className="text-xs text-blue-600 font-medium underline decoration-dotted hover:text-blue-700 transition-colors">
                 ({product.rating.totalReviews} đánh giá)
               </span>
             </>
           ) : (
             <>
-              <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-200">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-bold text-yellow-600">0.0</span>
+              <div className="flex items-center gap-0.5 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-200">
+                {/* 5 empty stars */}
+                {[1, 2, 3, 4, 5].map((starIndex) => (
+                  <Star
+                    key={starIndex}
+                    className="w-4 h-4 fill-gray-200 text-gray-300"
+                  />
+                ))}
+                <span className="text-xs font-bold text-gray-400 ml-1">0.0</span>
               </div>
-              <span className="text-xs text-yellow-600 font-medium">(Chưa có đánh giá)</span>
+              <span className="text-xs text-gray-400 font-medium">(Chưa có đánh giá)</span>
             </>
           )}
         </div>

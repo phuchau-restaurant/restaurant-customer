@@ -246,7 +246,7 @@ export const fetchDishDetails = async (dish) => {
 const mapMenuItem = (item, index, getCategoryName = () => "0") => ({
   id: item.id || index + 1,
   name: item.name,
-  description: item.description || "Không có mô tả",
+  description: item.description,
   price: item.price,
   category: getCategoryName(item.categoryId),
   imgUrl: item.imgUrl,

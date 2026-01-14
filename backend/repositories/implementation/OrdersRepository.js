@@ -93,7 +93,8 @@ export class OrdersRepository extends BaseRepository {
       .from(this.tableName)
       .select("*")
       .eq('table_id', tableId)
-      .eq('status', 'Unsubmit'); // Only get UNSUBMIT orders
+      .neq('status', 'Completed') // Not Paid/Completed
+      .neq('status', 'Cancelled'); // Not Cancelled
     
     // Add tenant filter for security
     if (tenantId) {

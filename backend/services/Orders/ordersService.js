@@ -159,10 +159,10 @@ class OrdersService {
       throw new Error("Must provide at least one dish to add");
     }
 
-    // 1. Verify order exists and is UNSUBMIT
+    // 1. Verify order exists and is ACTIVE (not completed/cancelled)
     const existingOrder = await this.getOrderById(orderId, tenantId);
-    if (existingOrder.order.status !== 'Unsubmit') {
-      throw new Error("Can only add items to UNSUBMIT orders");
+    if (existingOrder.order.status === 'Completed' || existingOrder.order.status === 'Cancelled') {
+      throw new Error("Cannot add items to a completed or cancelled order");
     }
 
     // 2. Calculate new items

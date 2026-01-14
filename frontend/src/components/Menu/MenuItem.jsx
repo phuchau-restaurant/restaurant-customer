@@ -216,7 +216,6 @@ const MenuItem = ({ product, onAdd, onImageClick, onShowReviews }) => {
         {/* Chef Recommended Badge */}
         {product.isRecommended && (
            <div className="absolute top-2 right-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg z-10 animate-bounce-slow">
-             <span>👨‍🍳</span>
              <span>Đề xuất</span>
            </div>
         )}

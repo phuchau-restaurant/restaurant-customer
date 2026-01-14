@@ -630,8 +630,7 @@ const MenuScreen = () => {
                   : "bg-white border-gray-200 text-gray-700 hover:border-orange-300 hover:bg-orange-50"
               }`}
             >
-              <span>👨‍🍳</span>
-              <span className="hidden md:inline">Đầu bếp </span>đề xuất
+              <span className="hidden md:inline">Đầu bếp đề xuất </span>
             </button>
           </div>
         </motion.div>

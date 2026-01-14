@@ -251,6 +251,9 @@ const mapMenuItem = (item, index, getCategoryName = () => "0") => ({
   category: getCategoryName(item.categoryId),
   imgUrl: item.imgUrl,
   isAvailable: item.isAvailable,
+  isRecommended: item.isRecommended || false,
+  orderCount: item.orderCount || 0,
+  rating: item.rating || { totalReviews: 0, averageRating: 0 },
   photos: [],
   modifierGroups: [],
 });
@@ -272,6 +275,10 @@ export const fetchMenus = async ({
   activeCategory = "0",
   pageNumber = null,
   pageSize = null,
+  sortBy = null,
+  isRecommended = false,
+  searchQuery = null,
+  priceRange = null,
 } = {}) => {
   try {
     const queryParams = new URLSearchParams();
@@ -283,6 +290,18 @@ export const fetchMenus = async ({
     }
     if (pageSize) {
       queryParams.append("pageSize", pageSize);
+    }
+    if (sortBy) {
+      queryParams.append("sortBy", sortBy);
+    }
+    if (isRecommended) {
+      queryParams.append("isRecommended", "true");
+    }
+    if (searchQuery && searchQuery.trim()) {
+      queryParams.append("searchQuery", searchQuery.trim());
+    }
+    if (priceRange && priceRange !== 'all') {
+      queryParams.append("priceRange", priceRange);
     }
 
     const url = `${BASE_URL}/api/menus${

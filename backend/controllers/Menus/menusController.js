@@ -10,8 +10,9 @@ class MenusController {
   getAll = async (req, res, next) => {
     try {
       const tenantId = req.tenantId;
-      const { categoryId, available, pageNumber, pageSize } = req.query; // Lấy query params
+      const { categoryId, available, pageNumber, pageSize, sortBy, isRecommended, searchQuery, priceRange } = req.query; // Lấy query params
       const onlyAvailable = available === "true";
+      const onlyRecommended = isRecommended === "true";
 
       // Parse pagination params
       const page = pageNumber ? parseInt(pageNumber, 10) : null;
@@ -37,7 +38,11 @@ class MenusController {
         categoryId,
         onlyAvailable,
         page,
-        limit
+        limit,
+        sortBy,
+        onlyRecommended,
+        searchQuery,
+        priceRange
       );
 
       // Check if result is paginated (object with data property) or just array

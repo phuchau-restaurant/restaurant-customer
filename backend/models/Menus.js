@@ -14,6 +14,9 @@ export class Menus {
     if (data.is_available !== undefined) this.isAvailable = data.is_available;
     else if (data.isAvailable !== undefined) this.isAvailable = data.isAvailable;
     else this.isAvailable = true;
+
+    this.isRecommended = data.is_recommended || data.isRecommended || false;
+    this.orderCount = data.order_count || data.orderCount || 0;
   }
 
   /**
@@ -30,6 +33,8 @@ export class Menus {
       price: this.price,
       image_url : this.imgUrl, // Đáng lẽ tên ở model sẽ là imageUrl nhưng để giữ consistency với các phần khác nên tạm dùng imgUrl
       is_available: this.isAvailable,
+      is_recommended: this.isRecommended,
+      order_count: this.orderCount,
     };
   }
 }

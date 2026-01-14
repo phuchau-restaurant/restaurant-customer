@@ -1,7 +1,8 @@
 // backend/services/Menus/menusService.js
 class MenusService {
-  constructor(menusRepository) {
+  constructor(menusRepository, dishRatingsRepository) {
     this.menusRepo = menusRepository;
+    this.dishRatingsRepo = dishRatingsRepository;
   }
 
   /**
@@ -12,8 +13,12 @@ class MenusService {
    * @param {boolean} onlyAvailable - Filter only available items
    * @param {number} pageNumber - Page number (1-indexed)
    * @param {number} pageSize - Items per page
+   * @param {string} sortBy - Sort key (price-asc, price-desc, name-asc, name-desc, popular)
+   * @param {boolean} isRecommended - Filter by chef recommendation
+   * @param {string} searchQuery - Search in name and description
+   * @param {string} priceRange - Price range filter (under-50, 50-100, above-100)
    */
-  async getMenusByTenant(tenantId, categoryId = null, onlyAvailable = false, pageNumber = null, pageSize = null) {
+  async getMenusByTenant(tenantId, categoryId = null, onlyAvailable = false, pageNumber = null, pageSize = null, sortBy = null, isRecommended = false, searchQuery = null, priceRange = null) {
     if (!tenantId) throw new Error("Missing tenantId");
 
     const filters = { tenant_id: tenantId };
@@ -26,8 +31,56 @@ class MenusService {
     if (onlyAvailable) {
       filters.is_available = true;
     }
+    // Filter by recommendation
+    if (isRecommended) {
+      filters.is_recommended = true;
+    }
 
-    return await this.menusRepo.getAll(filters, pageNumber, pageSize);
+    // Determine sort object
+    let sort = null;
+    if (sortBy) {
+        switch (sortBy) {
+            case 'price-asc': sort = { column: 'price', order: 'asc' }; break;
+            case 'price-desc': sort = { column: 'price', order: 'desc' }; break;
+            case 'name-asc': sort = { column: 'name', order: 'asc' }; break;
+            case 'name-desc': sort = { column: 'name', order: 'desc' }; break;
+            case 'popular': sort = { column: 'order_count', order: 'desc' }; break;
+            default: sort = null;
+        }
+    }
+
+    const result = await this.menusRepo.getAll(filters, pageNumber, pageSize, sort, searchQuery, priceRange);
+
+    // Populate ratings
+    let products = [];
+    const isPaginated = result && typeof result === 'object' && 'data' in result;
+    
+    if (isPaginated) {
+       products = result.data;
+    } else if (Array.isArray(result)) {
+       products = result;
+    }
+
+    if (products.length > 0 && this.dishRatingsRepo) {
+        try {
+            const dishIds = products.map(p => p.id);
+            const ratings = await this.dishRatingsRepo.getByDishIds(dishIds);
+            
+            const ratingsMap = {};
+            ratings.forEach(r => {
+                ratingsMap[r.dishId] = r;
+            });
+
+            products.forEach(p => {
+                p.rating = ratingsMap[p.id] || { totalReviews: 0, averageRating: 0 };
+            });
+        } catch (error) {
+            console.error("Error fetching ratings:", error);
+            // Non-blocking, continue without ratings
+        }
+    }
+
+    return result;
   }
 
   async getMenuById(id, tenantId) {
@@ -40,6 +93,17 @@ class MenusService {
     if (tenantId && menu.tenantId !== tenantId) {
       throw new Error("Access denied: Menu belongs to another tenant");
     }
+
+    if (this.dishRatingsRepo) {
+        try {
+            const rating = await this.dishRatingsRepo.getByDishId(id);
+            menu.rating = rating || { totalReviews: 0, averageRating: 0 };
+        } catch (error) {
+             console.error("Error fetching rating for dish:", id, error);
+            menu.rating = { totalReviews: 0, averageRating: 0 };
+        }
+    }
+
     return menu;
   }
 

@@ -15,7 +15,6 @@ import {
   fetchAvatarUrls,
   submitOrder,
 } from "../services/menuService";
-import { getBulkDishRatings } from "../services/ratingService";
 import Pagination from "../components/Pagination/Pagination";
 import FloatingCartButton from "../components/Cart/FloatingCartButton";
 import AnimatedHamburger from "../components/Menu/AnimatedHamburger";
@@ -45,6 +44,7 @@ const MenuScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("default");
   const [priceFilter, setPriceFilter] = useState("all");
+  const [isRecommended, setIsRecommended] = useState(false);
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -90,54 +90,29 @@ const MenuScreen = () => {
         // Chỉ thêm categoryId khi KHÔNG phải "0" (Tất cả)
         const categoryId = activeCategory !== "0" ? categoryIdMap[activeCategory] : null;
         
-        // Disable pagination when searching/filtering (client-side filtering)
-        const hasClientFilter = searchQuery || sortBy !== "default" || priceFilter !== "all";
-        
+        // All filtering is now done server-side, always use pagination
         const result = await fetchMenus({
           categoryId,
           categories,
           activeCategory,
-          pageNumber: hasClientFilter ? null : currentPage,
-          pageSize: hasClientFilter ? null : pageSize,
+          pageNumber: currentPage,
+          pageSize: pageSize,
+          sortBy: sortBy === 'default' ? null : sortBy,
+          isRecommended,
+          searchQuery: searchQuery || null,
+          priceRange: priceFilter === 'all' ? null : priceFilter,
         });
         
         // Handle paginated response
         if (result && typeof result === 'object' && 'products' in result) {
-          const productsData = result.products;
-          
-          // Fetch ratings for all dishes
-          const dishIds = productsData.map(p => p.id);
-          console.log('📊 Fetching ratings for dishes:', dishIds);
-          const ratingsMap = await getBulkDishRatings(dishIds);
-          console.log('📊 Ratings received:', ratingsMap);
-          
-          // Merge ratings into products
-          const productsWithRatings = productsData.map(product => ({
-            ...product,
-            rating: ratingsMap[product.id] || { totalReviews: 0, averageRating: 0 }
-          }));
-          console.log('📊 Products with ratings:', productsWithRatings.slice(0, 2));
-          
-          setProducts(productsWithRatings);
+          setProducts(result.products);
           setTotalPages(result.totalPages || 1);
           setTotalMenuItems(result.total || 0);
         } else {
           // Backward compatibility: if result is just an array
-          const productsData = result;
-          
-          // Fetch ratings for all dishes
-          const dishIds = productsData.map(p => p.id);
-          const ratingsMap = await getBulkDishRatings(dishIds);
-          
-          // Merge ratings into products
-          const productsWithRatings = productsData.map(product => ({
-            ...product,
-            rating: ratingsMap[product.id] || { totalReviews: 0, averageRating: 0 }
-          }));
-          
-          setProducts(productsWithRatings);
+          setProducts(result);
           setTotalPages(1);
-          setTotalMenuItems(productsData.length);
+          setTotalMenuItems(result.length);
         }
       } catch (err) {
         console.error("❌ Lỗi fetch menu:", err);
@@ -150,45 +125,12 @@ const MenuScreen = () => {
     if (activeCategory === "0" || categoryIdMap[activeCategory]) {
       loadMenusByCategory();
     }
-  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter]);
+  }, [activeCategory, categoryIdMap, categories, isInitialLoad, currentPage, pageSize, searchQuery, sortBy, priceFilter, isRecommended]);
 
-  // Filter and Sort Logic
+  // All filtering and sorting is now handled by backend
   const filteredAndSortedProducts = useMemo(() => {
-    let result = [...products];
-
-    // 1. Search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.description && p.description.toLowerCase().includes(query))
-      );
-    }
-
-    // 2. Filter by Price
-    if (priceFilter !== "all") {
-      result = result.filter((p) => {
-        if (priceFilter === "under-50") return p.price < 50000;
-        if (priceFilter === "50-100") return p.price >= 50000 && p.price <= 100000;
-        if (priceFilter === "above-100") return p.price > 100000;
-        return true;
-      });
-    }
-
-    // 3. Sort
-    if (sortBy !== "default") {
-      result.sort((a, b) => {
-        if (sortBy === "price-asc") return a.price - b.price;
-        if (sortBy === "price-desc") return b.price - a.price;
-        if (sortBy === "name-asc") return a.name.localeCompare(b.name);
-        if (sortBy === "name-desc") return b.name.localeCompare(a.name);
-        return 0;
-      });
-    }
-
-    return result;
-  }, [products, searchQuery, sortBy, priceFilter]);
+    return products;
+  }, [products]);
 
   // Pagination Handlers
   const handlePageChange = (newPage) => {
@@ -532,14 +474,30 @@ const MenuScreen = () => {
                 <option value="price-desc">Giá giảm dần</option>
                 <option value="name-asc">Tên (A-Z)</option>
                 <option value="name-desc">Tên (Z-A)</option>
+                <option value="popular">Phổ biến nhất</option>
               </select>
               <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
             </div>
+            
+             {/* Chef Recommended Toggle */}
+            <button
+              onClick={() => setIsRecommended(!isRecommended)}
+              className={`px-4 py-2 flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors border whitespace-nowrap ${
+                isRecommended
+                  ? "bg-orange-100 border-orange-200 text-orange-700 shadow-xs"
+                  : "bg-white border-gray-200 text-gray-700 hover:border-orange-300 hover:bg-orange-50"
+              }`}
+            >
+              <span>👨‍🍳</span>
+              <span className="hidden md:inline">Đầu bếp </span>đề xuất
+            </button>
           </div>
         </motion.div>
 
         <motion.div
+  // ...
+
           className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -600,12 +558,9 @@ const MenuScreen = () => {
           )}
         </motion.div>
 
-        {/* Pagination Component - Only show when not searching/filtering */}
+        {/* Pagination Component - Always show when there are results */}
         {!isLoadingMenu && 
-         filteredAndSortedProducts.length > 0 && 
-         !searchQuery && 
-         sortBy === "default" && 
-         priceFilter === "all" && (
+         filteredAndSortedProducts.length > 0 && (
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}

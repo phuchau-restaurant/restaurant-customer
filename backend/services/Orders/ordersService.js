@@ -47,6 +47,20 @@ class OrdersService {
         totalPrepTime += menuItem.prepTimeMinutes * quantity;
       }
 
+      // Track order count: Count number of ORDERS (not quantity) containing this dish
+      // This will be incremented ONCE per order, regardless of quantity
+      // We'll do this after the loop to avoid duplicate increments for same dish in one order
+      if (!orderDetailsToCreate.find(d => d.dishId === dishId)) {
+        // First time seeing this dish in current order
+        try {
+          const currentCount = menuItem.orderCount || 0;
+          await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
+        } catch (err) {
+          console.error(`Failed to update order count for dish ${dishId}`, err);
+          // Ignore error to not fail the order creation
+        }
+      }
+
       // Tính giá modifiers và lấy tên chuẩn từ DB
       let modifierTotal = 0;
       if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {

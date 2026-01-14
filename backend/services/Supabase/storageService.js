@@ -16,6 +16,29 @@ class StorageService {
   }
 
   /**
+   * Ensure bucket exists
+   */
+  async verifyBucket() {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.find(b => b.name === this.bucketName);
+    
+    if (!bucketExists) {
+        console.log(`Bucket '${this.bucketName}' not found. Creating...`);
+        const { data, error } = await supabase.storage.createBucket(this.bucketName, {
+            public: true,
+            fileSizeLimit: 10485760, // 10MB
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+        });
+        if (error) {
+             console.error("Failed to create bucket:", error);
+             // Don't throw here, maybe user permission issue, let upload fail naturally with clearer error
+        } else {
+            console.log(`Bucket '${this.bucketName}' created successfully.`);
+        }
+    }
+  }
+
+  /**
    * Upload single image file
    */
   async uploadImage(
@@ -25,6 +48,7 @@ class StorageService {
     customFileName = null
   ) {
     try {
+      await this.verifyBucket();
       // Tạo filename duy nhất
       const fileExtension = file.originalname.split(".").pop();
       const fileName = customFileName
@@ -39,7 +63,7 @@ class StorageService {
         .from(this.bucketName)
         .upload(filePath, file.buffer, {
           contentType: file.mimetype,
-          upsert: false,
+          upsert: true,
         });
 
       if (error) {
@@ -73,6 +97,7 @@ class StorageService {
     customFileName = null
   ) {
     try {
+      await this.verifyBucket();
       // Download image từ URL
       const response = await fetch(imageUrl);
       if (!response.ok) {
@@ -97,7 +122,7 @@ class StorageService {
         .from(this.bucketName)
         .upload(filePath, imageBuffer, {
           contentType: contentType,
-          upsert: false,
+          upsert: true,
         });
 
       if (error) {

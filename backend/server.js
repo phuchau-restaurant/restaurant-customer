@@ -34,7 +34,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- MIDDLEWARE ---
-app.use(cors()); // Cho phép Frontend gọi API
+// Cấu hình CORS chặt chẽ để fix lỗi "credentials mode is include"
+app.use(cors({
+  origin: "http://localhost:5173", // Chỉ định rõ URL Frontend
+  credentials: true,               // Cho phép gửi cookie/token
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"]
+}));
 app.use(express.json()); // QUAN TRỌNG: Để server đọc được JSON từ body request (req.body)
 // [LOGGER] Đặt ở đây để ghi lại MỌI request bay vào server
 app.use(requestLogger);

@@ -106,7 +106,7 @@ const ProfileInfo = ({ customer, currentAvatar }) => {
       const response = await uploadService.uploadSingle(
         file,
         "avatars", // folder
-        `avatar_${customerId || Date.now()}` // custom filename
+        `avatar_${customerId}_${Date.now()}` // custom filename
       );
 
       if (response.data && response.data.url) {

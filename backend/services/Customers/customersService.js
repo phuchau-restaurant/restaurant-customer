@@ -1,12 +1,12 @@
-// backend/services/Customers/customersService.js
-import { isValidPhoneNumber } from "../../helpers/validationHelper.js"; 
-import{ isValidFullName } from "../../helpers/validationHelper.js";
+import { isValidPhoneNumber, isValidFullName } from "../../helpers/validationHelper.js";
 import bcrypt from "bcryptjs";
 import emailService from "../emailService.js";
 import { generateOTP, saveOTP, verifyOTP } from "../../helpers/otpHelper.js";
 import { OAuth2Client } from "google-auth-library";
+import storageService from "../Supabase/storageService.js";
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Will need GOOGLE_CLIENT_ID in .env
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 
 class CustomersService {
   constructor(customerRepository) {
@@ -403,8 +403,16 @@ class CustomersService {
       throw new Error("Customer not found");
     }
 
-    // In future, you might want to add validation for URL format
-    // For now, just update the avatar field
+    // Delete old avatar if exists and is hosted on our storage
+    if (customer.avatar && customer.avatar.includes("restaurant-assets")) {
+      try {
+          await storageService.deleteByUrl(customer.avatar);
+          console.log("Deleted old avatar:", customer.avatar);
+      } catch (e) {
+          console.error("Failed to delete old avatar but proceeding:", e.message);
+      }
+    }
+
     return await this.customerRepo.update(customerId, { avatar: avatarUrl });
   }
 
@@ -494,6 +502,33 @@ class CustomersService {
    * @param {string} tenantId 
    * @param {string} token - Google ID Token
    */
+  /**
+   * Update customer avatar URL
+   * @param {string} customerId 
+   * @param {string} avatarUrl 
+   */
+  async updateAvatar(customerId, avatarUrl) {
+    if (!customerId) throw new Error("Customer ID is required");
+    if (!avatarUrl) throw new Error("Avatar URL is required");
+
+    const customer = await this.customerRepo.getById(customerId);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    // Delete old avatar if exists and is hosted on our storage
+    if (customer.avatar && customer.avatar.includes("restaurant-assets")) {
+      try {
+          await storageService.deleteByUrl(customer.avatar);
+          console.log("Deleted old avatar:", customer.avatar);
+      } catch (e) {
+          console.error("Failed to delete old avatar but proceeding:", e.message);
+      }
+    }
+
+    return await this.customerRepo.update(customerId, { avatar: avatarUrl });
+  }
+
   async authenticateWithGoogle(tenantId, token) {
     if (!tenantId) throw new Error("Tenant ID is required");
     if (!token) throw new Error("Google Token is required");

@@ -89,7 +89,7 @@ const MenuScreen = () => {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(6);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMenuItems, setTotalMenuItems] = useState(0);
 
@@ -511,7 +511,7 @@ const MenuScreen = () => {
                 className="lg:hidden"
               />
 
-              <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-4 md:px-5 py-2 md:py-3 rounded-full shadow-md text-sm md:text-md font-bold text-white">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-3 md:px-5 py-1.5 md:py-3 rounded-full shadow-md text-xs md:text-md font-bold text-white">
                 Bàn: {tableInfo?.number || "..."}
               </div>
             </div>
@@ -631,7 +631,7 @@ const MenuScreen = () => {
                   : "bg-white border-gray-200 text-gray-700 hover:border-orange-300 hover:bg-orange-50"
               }`}
             >
-              <span className="hidden md:inline">Đầu bếp đề xuất </span>
+              Đầu bếp đề xuất
             </button>
           </div>
         </motion.div>
@@ -707,7 +707,7 @@ const MenuScreen = () => {
             totalItems={totalMenuItems}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
-            pageSizeOptions={[12, 24, 36, 48]}
+            pageSizeOptions={[6, 12, 24, 48]}
           />
         )}
 

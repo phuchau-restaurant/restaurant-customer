@@ -9,6 +9,7 @@ import {
   canReviewDish,
 } from '../../services/reviewService';
 import { getOrdersByCustomerId } from '../../services/orderService';
+import Spinner from '../Common/Spinner';
 
 const OrderReviews = ({ customer }) => {
   const [reviews, setReviews] = useState([]);
@@ -205,7 +206,7 @@ const OrderReviews = ({ customer }) => {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+        <Spinner />
       </div>
     );
   }

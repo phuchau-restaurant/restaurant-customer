@@ -33,6 +33,7 @@ import ProfileSidebar from "../components/Profile/ProfileSidebar";
 import DishReviewsModal from "../components/Menu/DishReviewsModal";
 import PaymentModal from "../components/Payment/PaymentModal";
 import RecommendationsSection from "../components/Menu/RecommendationsSection";
+import MenuItemSkeleton from "../components/Skeleton/MenuItemSkeleton";
 
 
 const MenuScreen = () => {
@@ -644,17 +645,12 @@ const MenuScreen = () => {
           transition={{ duration: 0.5 }}
         >
           {isLoadingMenu ? (
-            <div className="col-span-full flex flex-col items-center justify-center h-[60vh]">
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Utensils className="w-6 h-6 text-orange-500 animate-pulse" />
-                </div>
-              </div>
-              <p className="mt-4 text-gray-500 font-medium">
-                Đang tải món ăn...
-              </p>
-            </div>
+            // Show skeleton cards while loading
+            <>
+              {[...Array(12)].map((_, index) => (
+                <MenuItemSkeleton key={index} />
+              ))}
+            </>
           ) : filteredAndSortedProducts.length === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
               <div className="bg-gray-100 p-4 rounded-full mb-3">

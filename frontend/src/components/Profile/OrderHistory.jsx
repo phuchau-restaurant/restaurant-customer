@@ -17,6 +17,7 @@ import { getOrdersByCustomerId } from "../../services/orderService";
 import PaymentModal from "../Payment/PaymentModal";
 import AlertModal from "../Modal/AlertModal";
 import { useAlert } from "../../hooks/useAlert";
+import Spinner from "../Common/Spinner";
 
 const OrderHistory = ({ customer }) => {
   const [orders, setOrders] = useState([]);
@@ -127,7 +128,7 @@ const OrderHistory = ({ customer }) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
+        <Spinner size="large" className="mb-4" />
         <p className="text-gray-500">Đang tải lịch sử đơn hàng...</p>
       </div>
     );

@@ -70,6 +70,40 @@ async update(id, updates) {
     return data.map(item => new Menus(item)) || [];
   }
 
+  /**
+   * Fuzzy search món ăn - cho phép tìm sai chính tả
+   * Sử dụng PostgreSQL pg_trgm (trigram similarity)
+   * @param {string} tenantId - ID của nhà hàng
+   * @param {string} searchTerm - Từ khóa tìm kiếm (có thể sai chính tả)
+   * @param {number} threshold - Ngưỡng similarity (0.0 - 1.0), mặc định 0.3
+   * @returns {Promise<Array>} Danh sách món ăn với similarity score
+   */
+  async fuzzySearch(tenantId, searchTerm, threshold = 0.3) {
+    if (!tenantId) throw new Error("TenantID is required for search");
+    if (!searchTerm || searchTerm.trim() === "") return [];
+
+    try {
+      // Use PostgreSQL function with trigram similarity
+      const { data, error } = await supabase.rpc('fuzzy_search_dishes', {
+        p_tenant_id: tenantId,
+        p_search_term: searchTerm.trim(),
+        p_threshold: threshold
+      });
+
+      if (error) {
+        console.warn('Fuzzy search RPC error:', error.message);
+        throw error;
+      }
+
+      // Map results to Menus model (similarity_score will be included in raw data)
+      return (data || []).map(item => new Menus(item));
+    } catch (error) {
+      // Fallback to simple ilike search if PostgreSQL function not available
+      console.warn('Fuzzy search not available, falling back to ilike:', error.message);
+      return this.findByName(tenantId, searchTerm);
+    }
+  }
+
 // override thêm getById để trả về Model
 async getById(id) {
     const rawData = await super.getById(id); // Gọi cha lấy raw data
@@ -81,11 +115,17 @@ async getById(id) {
    * @param {number} pageNumber - Page number (1-indexed)
    * @param {number} pageSize - Number of items per page
    * @param {Object} sort - Sort configuration { column, order }
-   * @param {string} searchQuery - Search text for name/description
+   * @param {string} searchQuery - Search text for name/description (uses fuzzy search)
    * @param {string} priceRange - Price range filter (under-50, 50-100, above-100)
    * @returns {Promise<Object>} Object with data, total, totalPages, currentPage
    */
   async getAll(filters = {}, pageNumber = null, pageSize = null, sort = null, searchQuery = null, priceRange = null) {
+    // If searchQuery is provided, use fuzzy search instead
+    if (searchQuery && searchQuery.trim()) {
+      return this._getAllWithFuzzySearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange);
+    }
+
+    // Original implementation without search
     let query = supabase.from(this.tableName).select('*', { count: 'exact' });
 
     // Apply filters
@@ -94,12 +134,6 @@ async getById(id) {
         query = query.eq(key, value);
       }
     });
-
-    // Apply search filter (search in name and description)
-    if (searchQuery && searchQuery.trim()) {
-      const searchTerm = searchQuery.trim();
-      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
-    }
 
     // Apply price range filter
     if (priceRange) {
@@ -156,6 +190,177 @@ async getById(id) {
     // Return just data if no pagination
     return mappedData;
   }
+
+  /**
+   * Internal method: Get all with fuzzy search
+   * Sử dụng fuzzy search khi có searchQuery
+   */
+  async _getAllWithFuzzySearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange) {
+    try {
+      // Get fuzzy search results
+      const tenantId = filters.tenant_id;
+      if (!tenantId) {
+        throw new Error("tenant_id is required in filters for fuzzy search");
+      }
+
+      const fuzzyResults = await this.fuzzySearch(tenantId, searchQuery, 0.2);
+      
+      // Apply additional filters on fuzzy results
+      let filteredResults = fuzzyResults;
+
+      // Apply other filters (excluding tenant_id which is already applied)
+      Object.entries(filters).forEach(([key, value]) => {
+        if (key !== 'tenant_id' && value !== null && value !== undefined) {
+          filteredResults = filteredResults.filter(item => {
+            // Convert to persistence format to match filter keys
+            const persistedItem = item.toPersistence();
+            return persistedItem[key] === value;
+          });
+        }
+      });
+
+      // Apply price range filter
+      if (priceRange) {
+        filteredResults = filteredResults.filter(item => {
+          const price = item.price;
+          switch (priceRange) {
+            case 'under-50':
+              return price < 50000;
+            case '50-100':
+              return price >= 50000 && price <= 100000;
+            case 'above-100':
+              return price > 100000;
+            default:
+              return true;
+          }
+        });
+      }
+
+      // Apply sorting (fuzzy search already sorts by similarity, but we can override)
+      if (sort) {
+        filteredResults.sort((a, b) => {
+          const aValue = a[this._toCamelCase(sort.column)];
+          const bValue = b[this._toCamelCase(sort.column)];
+          
+          if (aValue === null || aValue === undefined) return 1;
+          if (bValue === null || bValue === undefined) return -1;
+          
+          if (sort.order === 'asc') {
+            return aValue > bValue ? 1 : -1;
+          } else {
+            return aValue < bValue ? 1 : -1;
+          }
+        });
+      }
+      // If no sort specified, fuzzy search results are already sorted by similarity
+
+      const total = filteredResults.length;
+
+      // Apply pagination
+      let paginatedResults = filteredResults;
+      if (pageNumber && pageSize) {
+        const from = (pageNumber - 1) * pageSize;
+        const to = from + pageSize;
+        paginatedResults = filteredResults.slice(from, to);
+      }
+
+      // Return paginated response if pagination params provided
+      if (pageNumber && pageSize) {
+        return {
+          data: paginatedResults,
+          total: total,
+          totalPages: Math.ceil(total / pageSize),
+          currentPage: pageNumber,
+          pageSize: pageSize,
+        };
+      }
+
+      return paginatedResults;
+    } catch (error) {
+      console.error('[MenusRepository] Fuzzy search failed, using fallback:', error.message);
+      // Fallback to original ilike search
+      return this._getAllWithIlikeSearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange);
+    }
+  }
+
+  /**
+   * Fallback method: Get all with simple ILIKE search
+   */
+  async _getAllWithIlikeSearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange) {
+    let query = supabase.from(this.tableName).select('*', { count: 'exact' });
+
+    // Apply filters
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        query = query.eq(key, value);
+      }
+    });
+
+    // Apply search filter (search in name and description)
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = searchQuery.trim();
+      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+    }
+
+    // Apply price range filter
+    if (priceRange) {
+      switch (priceRange) {
+        case 'under-50':
+          query = query.lt('price', 50000);
+          break;
+        case '50-100':
+          query = query.gte('price', 50000).lte('price', 100000);
+          break;
+        case 'above-100':
+          query = query.gt('price', 100000);
+          break;
+      }
+    }
+
+    // Apply sorting
+    if (sort) {
+       query = query.order(sort.column, { ascending: sort.order === 'asc', nullsFirst: false });
+    } else {
+       query = query.order('name', { ascending: true });
+    }
+
+    // Get total count first
+    const { count: totalCount } = await query;
+
+    // Apply pagination if provided
+    if (pageNumber && pageSize) {
+      const from = (pageNumber - 1) * pageSize;
+      const to = from + pageSize - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: rawData, error } = await query;
+
+    if (error) throw new Error(`GetAll failed: ${error.message}`);
+
+    const mappedData = rawData.map(item => new Menus(item));
+
+    // Return paginated response if pagination params provided
+    if (pageNumber && pageSize) {
+      return {
+        data: mappedData,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / pageSize),
+        currentPage: pageNumber,
+        pageSize: pageSize,
+      };
+    }
+
+    return mappedData;
+  }
+
+  /**
+   * Helper: Convert snake_case to camelCase
+   */
+  _toCamelCase(str) {
+    return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  }
+
 
 
   ///<summary>

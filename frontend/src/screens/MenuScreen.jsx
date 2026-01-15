@@ -512,7 +512,7 @@ const MenuScreen = () => {
               />
 
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 inline-flex px-3 md:px-5 py-1.5 md:py-3 rounded-full shadow-md text-xs md:text-md font-bold text-white">
-                Bàn: {tableInfo?.number || "..."}
+                 {tableInfo?.number || "..."}
               </div>
             </div>
 

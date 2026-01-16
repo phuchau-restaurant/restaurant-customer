@@ -3,10 +3,17 @@ import { Server } from "socket.io";
 let io;
 
 export const initSocket = (httpServer) => {
+  // Danh sách origins được phép (dev + production)
+  const allowedOrigins = [
+    "http://localhost:5173",                                    // Development
+    process.env.FRONTEND_URL            // Production (Vercel)
+  ];
+
   io = new Server(httpServer, {
     cors: {
-      origin: "*", // Cho phép mọi origin kết nối
-      methods: ["GET", "POST"]
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
 

@@ -41,9 +41,25 @@ const PORT = process.env.PORT || 3000;
 initSocket(httpServer);
 
 // --- MIDDLEWARE ---
-// Cấu hình CORS chặt chẽ để fix lỗi "credentials mode is include"
+// Danh sách origins được phép (dev + production)
+const allowedOrigins = [
+  "http://localhost:5173",                                    // Development
+  process.env.FRONTEND_URL           // Production (Vercel)
+];
+
+// Cấu hình CORS để hỗ trợ nhiều origins
 app.use(cors({
-  origin: "http://localhost:5173", // Chỉ định rõ URL Frontend
+  origin: function (origin, callback) {
+    // Cho phép requests không có origin (như mobile apps hoặc curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,               // Cho phép gửi cookie/token
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"]

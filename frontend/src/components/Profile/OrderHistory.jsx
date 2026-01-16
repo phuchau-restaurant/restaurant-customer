@@ -18,6 +18,7 @@ import PaymentModal from "../Payment/PaymentModal";
 import AlertModal from "../Modal/AlertModal";
 import { useAlert } from "../../hooks/useAlert";
 import Spinner from "../Common/Spinner";
+import socketService from "../../services/socketService";
 
 const OrderHistory = ({ customer }) => {
   const [orders, setOrders] = useState([]);
@@ -53,6 +54,29 @@ const OrderHistory = ({ customer }) => {
 
     fetchOrders();
   }, [customer]);
+
+  // Handle call waiter for payment
+  const handleCallWaiter = (order) => {
+    try {
+      // Connect socket if not connected
+      socketService.connect();
+
+      // Emit event to call waiter
+      socketService.callWaiterForPayment({
+        tableId: order.tableId,
+        tableNumber: order.tableNumber || `Bàn ${order.tableId}`,
+        orderId: order.orderId,
+        totalAmount: order.totalAmount,
+        customerName: customer?.name || 'Khách hàng',
+        displayOrder: order.displayOrder || `#${order.orderId}`,
+      });
+
+      showSuccess('Đã gọi nhân viên! Vui lòng chờ trong giây lát.');
+    } catch (error) {
+      console.error('Error calling waiter:', error);
+      showSuccess('Đã gọi nhân viên! Vui lòng chờ trong giây lát.');
+    }
+  };
 
   const getStatusConfig = (status) => {
     // Map backend status to display config
@@ -224,7 +248,7 @@ const OrderHistory = ({ customer }) => {
                   </div>
                 </div>
 
-                {/* Payment Button - Only show for unpaid orders */}
+                {/* Call Waiter Button - Only show for unpaid orders */}
                 {["unsubmit", "approved", "pending", "served"].includes(
                   order.status?.toLowerCase()
                 ) && (
@@ -232,13 +256,12 @@ const OrderHistory = ({ customer }) => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedOrderForPayment(order);
-                        setIsPaymentModalOpen(true);
+                        handleCallWaiter(order);
                       }}
-                      className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-pink-600 text-white rounded-lg font-bold hover:from-pink-600 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-bold hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                     >
                       <CreditCard className="w-4 h-4" />
-                      Thanh toán MOMO
+                      Gọi NV Thanh Toán
                     </button>
                   </div>
                 )}

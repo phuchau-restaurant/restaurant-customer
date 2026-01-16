@@ -21,7 +21,6 @@ class OrdersService {
 
     // 1. Tính toán & Chuẩn bị data chi tiết
     let calculatedTotalAmount = 0;
-    let totalPrepTime = 0; // Tổng thời gian chuẩn bị
     const orderDetailsToCreate = [];
 
     for (const dish of dishes) {
@@ -41,11 +40,6 @@ class OrdersService {
       }
 
       const unitPrice = menuItem.price;
-
-      // Cộng dồn thời gian chuẩn bị của từng món
-      if (menuItem.prepTimeMinutes) {
-        totalPrepTime += menuItem.prepTimeMinutes * quantity;
-      }
 
       // Track order count: Count number of ORDERS (not quantity) containing this dish
       // This will be incremented ONCE per order, regardless of quantity
@@ -99,7 +93,6 @@ class OrdersService {
       customerId, // Thêm customerId vào order
       status: OrdersStatus.UNSUBMIT, // Mặc định khi tạo là 'Unsubmit'
       totalAmount: calculatedTotalAmount,
-      prepTimeOrder: totalPrepTime, // Tổng thời gian chuẩn bị đơn hàng
       // Tạo mã đơn hiển thị (ví dụ đơn giản)
       displayOrder: `ORD-${Date.now().toString().slice(-6)}`,
     });
@@ -138,7 +131,10 @@ class OrdersService {
       await this.orderItemModifiersRepo.createMany(modifiersToCreate);
     }
 
-    // 5. Trả về kết quả gộp
+    // 5. Update table's current_order_id to track active order
+    await this.tablesRepo.update(tableId, { currentOrderId: newOrder.id });
+
+    // 6. Trả về kết quả gộp
     return {
       order: newOrder,
       details: createdDetails,
@@ -167,7 +163,6 @@ class OrdersService {
 
     // 2. Calculate new items
     let additionalAmount = 0;
-    let additionalPrepTime = 0;
     const newDetailsToCreate = [];
 
     for (const dish of dishes) {
@@ -182,11 +177,6 @@ class OrdersService {
       }
 
       const unitPrice = menuItem.price;
-
-      // Add prep time
-      if (menuItem.prepTimeMinutes) {
-        additionalPrepTime += menuItem.prepTimeMinutes * quantity;
-      }
 
       // Increment order count
       try {
@@ -253,10 +243,9 @@ class OrdersService {
       await this.orderItemModifiersRepo.createMany(modifiersToCreate);
     }
 
-    // 5. Update order total and prep time
+    // 5. Update order total amount
     const updatedOrder = await this.ordersRepo.update(orderId, {
       totalAmount: existingOrder.order.totalAmount + additionalAmount,
-      prepTimeOrder: (existingOrder.order.prepTimeOrder || 0) + additionalPrepTime,
     });
 
     return {
@@ -367,9 +356,8 @@ class OrdersService {
       // 3. Xóa order details cũ
       await this.orderDetailsRepo.deleteByOrderId(id);
 
-      // 4. Tính toán totalAmount và prepTimeOrder từ dishes mới
+      // 4. Tính toán totalAmount từ dishes mới
       let calculatedTotalAmount = 0;
-      let totalPrepTime = 0; // Tổng thời gian chuẩn bị
       const orderDetailsToCreate = [];
 
       for (const dish of dishes) {
@@ -384,11 +372,6 @@ class OrdersService {
         }
 
         const unitPrice = menuItem.price;
-
-        // Cộng dồn thời gian chuẩn bị của từng món
-        if (menuItem.prepTimeMinutes) {
-          totalPrepTime += menuItem.prepTimeMinutes * quantity;
-        }
 
         // Tính giá modifiers
         let modifierTotal = 0;
@@ -445,9 +428,8 @@ class OrdersService {
         }
       }
 
-      // 7. Update totalAmount và prepTimeOrder
+      // 7. Update totalAmount
       updates.totalAmount = calculatedTotalAmount;
-      updates.prepTimeOrder = totalPrepTime;
       // Bỏ dishes khỏi updates vì đã xử lý riêng
       delete updates.dishes;
     }
@@ -485,6 +467,9 @@ class OrdersService {
       }
 
       updates.completedAt = new Date();
+      
+      // Clear table's current_order_id since order is completed
+      await this.tablesRepo.update(currentOrder.order.tableId, { currentOrderId: null });
     }
 
     // IF OrderStatus == Served -> Tự động chuyển các items thành Served
@@ -517,6 +502,9 @@ class OrdersService {
       await this.orderDetailsRepo.updateByOrderId(id, {
         status: OrderDetailStatus.CANCELLED,
       });
+      
+      // Clear table's current_order_id since order is cancelled
+      await this.tablesRepo.update(currentOrder.order.tableId, { currentOrderId: null });
     }
 
     // 3. Gọi Repo update order header
@@ -524,7 +512,7 @@ class OrdersService {
   }
 
   async deleteOrder(id, tenantId) {
-    await this.getOrderById(id, tenantId);
+    const orderInfo = await this.getOrderById(id, tenantId);
 
     // 1. Lấy order detail IDs
     const details = await this.orderDetailsRepo.getByOrderId(id);
@@ -538,7 +526,15 @@ class OrdersService {
     // 3. Xóa order details
     await this.orderDetailsRepo.deleteByOrderId(id);
 
-    // 4. Xóa order
+    // 4. Clear table's current_order_id if this was the current order
+    if (orderInfo.order.tableId) {
+      const table = await this.tablesRepo.getById(orderInfo.order.tableId);
+      if (table && table.currentOrderId === id) {
+        await this.tablesRepo.update(orderInfo.order.tableId, { currentOrderId: null });
+      }
+    }
+
+    // 5. Xóa order
     return await this.ordersRepo.delete(id);
   }
 
@@ -663,7 +659,6 @@ class OrdersService {
           orderStatus: order.status, // Trạng thái đơn (Approved, Pending, etc) cho Kitchen button
           note: order.note || "...",
           createdAt: order.createdAt,
-          prepTimeOrder: order.prepTimeOrder, // Thời gian chuẩn bị đơn hàng (phút)
           dishes: visibleDishes, // Chỉ trả về các món đã lọc
         };
       })
@@ -920,6 +915,7 @@ class OrdersService {
   /**
    * Get active (UNSUBMIT) order for a table
    * Used by frontend to check if there's an existing order to add items to
+   * OPTIMIZED: Uses current_order_id from tables instead of querying all orders
    * @param {number} tableId - Table ID
    * @param {string} tenantId - Tenant ID
    * @returns {Promise<Object|null>} Active order with details or null
@@ -928,14 +924,43 @@ class OrdersService {
     if (!tableId) throw new Error("Table ID is required");
     if (!tenantId) throw new Error("Tenant ID is required");
 
-    const activeOrder = await this.ordersRepo.getActiveOrderByTable(tableId, tenantId);
+    // 1. Get table info to check current_order_id
+    const table = await this.tablesRepo.getById(tableId);
     
-    if (!activeOrder) {
+    if (!table) {
+      throw new Error("Table not found");
+    }
+
+    // Security check: ensure table belongs to tenant
+    if (table.tenantId !== tenantId) {
+      throw new Error("Access denied: Table belongs to another tenant");
+    }
+
+    // 2. If no current order, return null immediately (no need to query orders)
+    if (!table.currentOrderId) {
       return null;
     }
 
-    // Get full order details
-    return await this.getOrderById(activeOrder.id, tenantId);
+    // 3. Get the current order details
+    try {
+      const order = await this.getOrderById(table.currentOrderId, tenantId);
+      
+      // Verify order is still active (not completed/cancelled)
+      if (order.order.status === 'Completed' || order.order.status === 'Cancelled') {
+        // Order is no longer active, clear current_order_id
+        await this.tablesRepo.update(tableId, { currentOrderId: null });
+        return null;
+      }
+      
+      return order;
+    } catch (error) {
+      // If order not found, clear the stale current_order_id
+      if (error.message.includes("not found")) {
+        await this.tablesRepo.update(tableId, { currentOrderId: null });
+        return null;
+      }
+      throw error;
+    }
   }
 }
 export default OrdersService;

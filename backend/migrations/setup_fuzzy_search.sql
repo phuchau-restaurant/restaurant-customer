@@ -7,6 +7,11 @@ CREATE INDEX IF NOT EXISTS idx_dishes_description_trgm ON dishes USING gin (desc
 
 -- PostgreSQL function for fuzzy search dishes
 -- Returns dishes matching the search term with similarity score
+-- Updated to filter only active categories
+
+-- Drop existing function first to allow changing return type
+DROP FUNCTION IF EXISTS fuzzy_search_dishes(UUID, TEXT, FLOAT);
+
 CREATE OR REPLACE FUNCTION fuzzy_search_dishes(
     p_tenant_id UUID,
     p_search_term TEXT,
@@ -18,14 +23,17 @@ RETURNS TABLE (
     category_id INTEGER,
     name VARCHAR(255),
     description TEXT,
-    price DECIMAL(10,2),
-    img_url TEXT,
+    price NUMERIC,
+    image_url TEXT,
     is_available BOOLEAN,
-    order_count INTEGER,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    similarity_score FLOAT
-) AS $$
+    is_recommended BOOLEAN,
+    order_count BIGINT,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    similarity_score REAL
+) 
+LANGUAGE plpgsql
+AS $$
 BEGIN
     RETURN QUERY
     SELECT 
@@ -35,18 +43,21 @@ BEGIN
         d.name,
         d.description,
         d.price,
-        d.img_url,
+        d.image_url,
         d.is_available,
+        d.is_recommended,
         d.order_count,
         d.created_at,
         d.updated_at,
         GREATEST(
             similarity(d.name, p_search_term),
             similarity(COALESCE(d.description, ''), p_search_term)
-        ) as similarity_score
+        )::REAL AS similarity_score
     FROM dishes d
+    INNER JOIN categories c ON d.category_id = c.id
     WHERE 
         d.tenant_id = p_tenant_id
+        AND c.is_active = true
         AND (
             similarity(d.name, p_search_term) > p_threshold
             OR similarity(COALESCE(d.description, ''), p_search_term) > p_threshold
@@ -56,4 +67,4 @@ BEGIN
     ORDER BY similarity_score DESC, d.order_count DESC NULLS LAST
     LIMIT 50;
 END;
-$$ LANGUAGE plpgsql;
+$$;

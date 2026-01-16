@@ -8,50 +8,50 @@ import { Menus } from "../../models/Menus.js";
 export class MenusRepository extends BaseRepository {
   constructor() {
     // Mapping: [id, tenant_id, category_id, name, description, price, img_url, is_available]
-    super("dishes", "id"); 
+    super("dishes", "id");
   }
   /**
    * Tìm category theo tên (Bắt buộc phải có tenant_id để tránh lộ data)
    * @param {string} tenantId - ID của nhà hàng/thuê bao
    * @param {string} name - Tên cần tìm
    */
-//
+  //
   async create(data) {
     const menuEntity = new Menus(data);
 
-    const dbPayload = menuEntity.toPersistence(); 
+    const dbPayload = menuEntity.toPersistence();
 
     const { data: result, error } = await supabase
       .from(this.tableName)
-      .insert([dbPayload]) 
+      .insert([dbPayload])
       .select();
 
     if (error) throw new Error(`Create failed: ${error.message}`);
-    
+
     //  Map kết quả trả về ngược lại thành Model để trả lên Service
     return result?.[0] ? new Menus(result[0]) : null;
   }
 
-async update(id, updates) {
-    //"Clean Payload"  
+  async update(id, updates) {
+    //"Clean Payload"
     const menuEntity = new Menus(updates);
     const dbPayload = menuEntity.toPersistence();
 
     // Loại bỏ các key có giá trị undefined -> Vì default value của is_active có thể không đc truyền vào
     // lọc sạch object dbPayload.
-    Object.keys(dbPayload).forEach(key => {
-        if (dbPayload[key] === undefined) {
-            delete dbPayload[key];
-        }
+    Object.keys(dbPayload).forEach((key) => {
+      if (dbPayload[key] === undefined) {
+        delete dbPayload[key];
+      }
     });
     const { data, error } = await supabase
       .from(this.tableName)
-      .update(dbPayload) 
+      .update(dbPayload)
       .eq(this.primaryKey, id)
       .select();
 
     if (error) throw new Error(`[Menu] Update failed: ${error.message}`);
-    
+
     //mapping return model
     return data?.[0] ? new Menus(data[0]) : null;
   }
@@ -62,12 +62,12 @@ async update(id, updates) {
     const { data, error } = await supabase
       .from(this.tableName)
       .select("*")
-      .eq('tenant_id', tenantId) // Chỉ tìm trong tenant này
-      .ilike('name', `%${name}%`);
+      .eq("tenant_id", tenantId) // Chỉ tìm trong tenant này
+      .ilike("name", `%${name}%`);
 
     if (error) throw new Error(`FindByName failed: ${error.message}`);
     // return model not raw
-    return data.map(item => new Menus(item)) || [];
+    return data.map((item) => new Menus(item)) || [];
   }
 
   /**
@@ -84,31 +84,34 @@ async update(id, updates) {
 
     try {
       // Use PostgreSQL function with trigram similarity
-      const { data, error } = await supabase.rpc('fuzzy_search_dishes', {
+      const { data, error } = await supabase.rpc("fuzzy_search_dishes", {
         p_tenant_id: tenantId,
         p_search_term: searchTerm.trim(),
-        p_threshold: threshold
+        p_threshold: threshold,
       });
 
       if (error) {
-        console.warn('Fuzzy search RPC error:', error.message);
+        console.warn("Fuzzy search RPC error:", error.message);
         throw error;
       }
 
       // Map results to Menus model (similarity_score will be included in raw data)
-      return (data || []).map(item => new Menus(item));
+      return (data || []).map((item) => new Menus(item));
     } catch (error) {
       // Fallback to simple ilike search if PostgreSQL function not available
-      console.warn('Fuzzy search not available, falling back to ilike:', error.message);
+      console.warn(
+        "Fuzzy search not available, falling back to ilike:",
+        error.message
+      );
       return this.findByName(tenantId, searchTerm);
     }
   }
 
-// override thêm getById để trả về Model
-async getById(id) {
+  // override thêm getById để trả về Model
+  async getById(id) {
     const rawData = await super.getById(id); // Gọi cha lấy raw data
     return rawData ? new Menus(rawData) : null; // Map sang Model
-}
+  }
   /**
    * Get all menus with pagination support
    * @param {Object} filters - Filter conditions
@@ -119,14 +122,32 @@ async getById(id) {
    * @param {string} priceRange - Price range filter (under-50, 50-100, above-100)
    * @returns {Promise<Object>} Object with data, total, totalPages, currentPage
    */
-  async getAll(filters = {}, pageNumber = null, pageSize = null, sort = null, searchQuery = null, priceRange = null) {
+  async getAll(
+    filters = {},
+    pageNumber = null,
+    pageSize = null,
+    sort = null,
+    searchQuery = null,
+    priceRange = null
+  ) {
     // If searchQuery is provided, use fuzzy search instead
     if (searchQuery && searchQuery.trim()) {
-      return this._getAllWithFuzzySearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange);
+      return this._getAllWithFuzzySearch(
+        filters,
+        pageNumber,
+        pageSize,
+        sort,
+        searchQuery,
+        priceRange
+      );
     }
 
     // Original implementation without search
-    let query = supabase.from(this.tableName).select('*', { count: 'exact' });
+    // JOIN with categories to filter only active categories
+    let query = supabase
+      .from(this.tableName)
+      .select("*, categories!inner(is_active)", { count: "exact" })
+      .eq("categories.is_active", true);
 
     // Apply filters
     Object.entries(filters).forEach(([key, value]) => {
@@ -138,26 +159,29 @@ async getById(id) {
     // Apply price range filter
     if (priceRange) {
       switch (priceRange) {
-        case 'under-50':
-          query = query.lt('price', 50000);
+        case "under-50":
+          query = query.lt("price", 50000);
           break;
-        case '50-100':
-          query = query.gte('price', 50000).lte('price', 100000);
+        case "50-100":
+          query = query.gte("price", 50000).lte("price", 100000);
           break;
-        case 'above-100':
-          query = query.gt('price', 100000);
+        case "above-100":
+          query = query.gt("price", 100000);
           break;
       }
     }
 
     // Apply sorting
     if (sort) {
-       // sort format: { column: 'price', order: 'asc' }
-       // Ensure nulls always appear last (e.g. for popularity sort DESC)
-       query = query.order(sort.column, { ascending: sort.order === 'asc', nullsFirst: false });
+      // sort format: { column: 'price', order: 'asc' }
+      // Ensure nulls always appear last (e.g. for popularity sort DESC)
+      query = query.order(sort.column, {
+        ascending: sort.order === "asc",
+        nullsFirst: false,
+      });
     } else {
-       // Default sort (optional) - e.g. by name
-       query = query.order('name', { ascending: true });
+      // Default sort (optional) - e.g. by name
+      query = query.order("name", { ascending: true });
     }
 
     // Get total count first
@@ -174,7 +198,7 @@ async getById(id) {
 
     if (error) throw new Error(`GetAll failed: ${error.message}`);
 
-    const mappedData = rawData.map(item => new Menus(item));
+    const mappedData = rawData.map((item) => new Menus(item));
 
     // Return paginated response if pagination params provided
     if (pageNumber && pageSize) {
@@ -195,7 +219,14 @@ async getById(id) {
    * Internal method: Get all with fuzzy search
    * Sử dụng fuzzy search khi có searchQuery
    */
-  async _getAllWithFuzzySearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange) {
+  async _getAllWithFuzzySearch(
+    filters,
+    pageNumber,
+    pageSize,
+    sort,
+    searchQuery,
+    priceRange
+  ) {
     try {
       // Get fuzzy search results
       const tenantId = filters.tenant_id;
@@ -204,14 +235,17 @@ async getById(id) {
       }
 
       const fuzzyResults = await this.fuzzySearch(tenantId, searchQuery, 0.2);
-      
+
+      // Filter out items with inactive categories
+      const activeMenuItems = await this._filterByActiveCategory(fuzzyResults);
+
       // Apply additional filters on fuzzy results
-      let filteredResults = fuzzyResults;
+      let filteredResults = activeMenuItems;
 
       // Apply other filters (excluding tenant_id which is already applied)
       Object.entries(filters).forEach(([key, value]) => {
-        if (key !== 'tenant_id' && value !== null && value !== undefined) {
-          filteredResults = filteredResults.filter(item => {
+        if (key !== "tenant_id" && value !== null && value !== undefined) {
+          filteredResults = filteredResults.filter((item) => {
             // Convert to persistence format to match filter keys
             const persistedItem = item.toPersistence();
             return persistedItem[key] === value;
@@ -221,14 +255,14 @@ async getById(id) {
 
       // Apply price range filter
       if (priceRange) {
-        filteredResults = filteredResults.filter(item => {
+        filteredResults = filteredResults.filter((item) => {
           const price = item.price;
           switch (priceRange) {
-            case 'under-50':
+            case "under-50":
               return price < 50000;
-            case '50-100':
+            case "50-100":
               return price >= 50000 && price <= 100000;
-            case 'above-100':
+            case "above-100":
               return price > 100000;
             default:
               return true;
@@ -241,11 +275,11 @@ async getById(id) {
         filteredResults.sort((a, b) => {
           const aValue = a[this._toCamelCase(sort.column)];
           const bValue = b[this._toCamelCase(sort.column)];
-          
+
           if (aValue === null || aValue === undefined) return 1;
           if (bValue === null || bValue === undefined) return -1;
-          
-          if (sort.order === 'asc') {
+
+          if (sort.order === "asc") {
             return aValue > bValue ? 1 : -1;
           } else {
             return aValue < bValue ? 1 : -1;
@@ -277,17 +311,38 @@ async getById(id) {
 
       return paginatedResults;
     } catch (error) {
-      console.error('[MenusRepository] Fuzzy search failed, using fallback:', error.message);
+      console.error(
+        "[MenusRepository] Fuzzy search failed, using fallback:",
+        error.message
+      );
       // Fallback to original ilike search
-      return this._getAllWithIlikeSearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange);
+      return this._getAllWithIlikeSearch(
+        filters,
+        pageNumber,
+        pageSize,
+        sort,
+        searchQuery,
+        priceRange
+      );
     }
   }
 
   /**
    * Fallback method: Get all with simple ILIKE search
    */
-  async _getAllWithIlikeSearch(filters, pageNumber, pageSize, sort, searchQuery, priceRange) {
-    let query = supabase.from(this.tableName).select('*', { count: 'exact' });
+  async _getAllWithIlikeSearch(
+    filters,
+    pageNumber,
+    pageSize,
+    sort,
+    searchQuery,
+    priceRange
+  ) {
+    // JOIN with categories to filter only active categories
+    let query = supabase
+      .from(this.tableName)
+      .select("*, categories!inner(is_active)", { count: "exact" })
+      .eq("categories.is_active", true);
 
     // Apply filters
     Object.entries(filters).forEach(([key, value]) => {
@@ -299,29 +354,34 @@ async getById(id) {
     // Apply search filter (search in name and description)
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      query = query.or(
+        `name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
+      );
     }
 
     // Apply price range filter
     if (priceRange) {
       switch (priceRange) {
-        case 'under-50':
-          query = query.lt('price', 50000);
+        case "under-50":
+          query = query.lt("price", 50000);
           break;
-        case '50-100':
-          query = query.gte('price', 50000).lte('price', 100000);
+        case "50-100":
+          query = query.gte("price", 50000).lte("price", 100000);
           break;
-        case 'above-100':
-          query = query.gt('price', 100000);
+        case "above-100":
+          query = query.gt("price", 100000);
           break;
       }
     }
 
     // Apply sorting
     if (sort) {
-       query = query.order(sort.column, { ascending: sort.order === 'asc', nullsFirst: false });
+      query = query.order(sort.column, {
+        ascending: sort.order === "asc",
+        nullsFirst: false,
+      });
     } else {
-       query = query.order('name', { ascending: true });
+      query = query.order("name", { ascending: true });
     }
 
     // Get total count first
@@ -338,7 +398,7 @@ async getById(id) {
 
     if (error) throw new Error(`GetAll failed: ${error.message}`);
 
-    const mappedData = rawData.map(item => new Menus(item));
+    const mappedData = rawData.map((item) => new Menus(item));
 
     // Return paginated response if pagination params provided
     if (pageNumber && pageSize) {
@@ -361,8 +421,6 @@ async getById(id) {
     return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
   }
 
-
-
   ///<summary>
   /// Lấy danh sách món ăn theo danh sách ID
   ///</summary>
@@ -375,20 +433,20 @@ async getById(id) {
     const { data, error } = await supabase
       .from(this.tableName) // 'dishes' table
       .select("*")
-      .in('id', uniqueIds);
+      .in("id", uniqueIds);
 
     if (error) throw new Error(`[Menus] GetByIds failed: ${error.message}`);
-    
-    return data.map(item => new Menus(item)); 
+
+    return data.map((item) => new Menus(item));
   }
 
   /**
    * Get recommended dishes for a specific dish
-   * Logic: 
+   * Logic:
    * 1. Lấy các món cùng danh mục (trừ món hiện tại)
    * 2. Ưu tiên món phổ biến (order_count cao)
    * NOTE: Ratings sẽ được populate ở Service layer
-   * 
+   *
    * @param {number} dishId - ID of current dish
    * @param {string} tenantId - Tenant ID
    * @param {number} limit - Number of recommendations (default: 6)
@@ -403,24 +461,76 @@ async getById(id) {
       }
 
       // 2. Query gợi ý: Cùng danh mục + sắp xếp theo độ phổ biến
+      // JOIN with categories to ensure category is active
       const { data, error } = await supabase
         .from(this.tableName)
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('category_id', currentDish.categoryId)  // Cùng danh mục
-        .eq('is_available', true)                    // Chỉ món đang bán
-        .neq('id', dishId)                           // Trừ món hiện tại
-        .order('order_count', { ascending: false })  // Ưu tiên món phổ biến
-        .order('id', { ascending: false })           // Món mới thêm nếu order_count bằng nhau
+        .select("*, categories!inner(is_active)")
+        .eq("categories.is_active", true) // Only active categories
+        .eq("tenant_id", tenantId)
+        .eq("category_id", currentDish.categoryId) // Cùng danh mục
+        .eq("is_available", true) // Chỉ món đang bán
+        .neq("id", dishId) // Trừ món hiện tại
+        .order("order_count", { ascending: false }) // Ưu tiên món phổ biến
+        .order("id", { ascending: false }) // Món mới thêm nếu order_count bằng nhau
         .limit(limit);
 
-      if (error) throw new Error(`[Menus] GetRecommendedDishes failed: ${error.message}`);
+      if (error)
+        throw new Error(
+          `[Menus] GetRecommendedDishes failed: ${error.message}`
+        );
 
       // 3. Map sang Model (ratings sẽ được thêm ở Service layer)
-      return data.map(dish => new Menus(dish));
+      return data.map((dish) => new Menus(dish));
     } catch (error) {
       console.error("[MenusRepository] Error in getRecommendedDishes:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Helper method: Filter menu items by active category
+   * @param {Array} menuItems - Array of Menus model objects
+   * @returns {Promise<Array>} Filtered array with only active category items
+   */
+  async _filterByActiveCategory(menuItems) {
+    if (!menuItems || menuItems.length === 0) {
+      return [];
+    }
+
+    try {
+      // Get unique category IDs from menu items
+      const categoryIds = [
+        ...new Set(menuItems.map((item) => item.categoryId).filter(Boolean)),
+      ];
+
+      if (categoryIds.length === 0) {
+        return menuItems; // No categories to filter
+      }
+
+      // Query categories to check is_active status
+      const { data: categories, error } = await supabase
+        .from("categories")
+        .select("id, is_active")
+        .in("id", categoryIds);
+
+      if (error) {
+        console.error("[MenusRepository] Error fetching categories:", error);
+        return menuItems; // Return all items if query fails
+      }
+
+      // Create a Set of active category IDs for fast lookup
+      const activeCategoryIds = new Set(
+        categories.filter((cat) => cat.is_active === true).map((cat) => cat.id)
+      );
+
+      // Filter menu items to only include those with active categories
+      return menuItems.filter((item) => activeCategoryIds.has(item.categoryId));
+    } catch (error) {
+      console.error(
+        "[MenusRepository] Error in _filterByActiveCategory:",
+        error
+      );
+      return menuItems; // Return all items if filtering fails
     }
   }
 }

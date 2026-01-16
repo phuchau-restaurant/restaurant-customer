@@ -1,6 +1,7 @@
 //backend/services/Orders/ordersService.js
 import OrdersStatus from "../../constants/orderStatus.js";
 import OrderDetailStatus from "../../constants/orderdetailStatus.js";
+import { getIO } from "../../configs/socket.js";
 class OrdersService {
   // Inject 6 Repo: Orders, OrderDetails, Menus, OrderItemModifiers, ModifierOptions, Tables
   constructor(ordersRepo, orderDetailsRepo, menusRepo, orderItemModifiersRepo, modifierOptionsRepo, tablesRepo) {
@@ -134,7 +135,26 @@ class OrdersService {
     // 5. Update table's current_order_id to track active order
     await this.tablesRepo.update(tableId, { currentOrderId: newOrder.id });
 
-    // 6. Trả về kết quả gộp
+    // 6. Emit Socket.IO event để thông báo waiter có đơn mới
+    try {
+      const io = getIO();
+      const tableInfo = await this.tablesRepo.getById(tableId);
+      io.to("waiters").emit("order:created", {
+        orderId: newOrder.id,
+        tableId: tableId,
+        tableNumber: tableInfo?.tableNumber || tableId,
+        displayOrder: newOrder.displayOrder,
+        totalAmount: newOrder.totalAmount,
+        itemCount: createdDetails.length,
+        timestamp: new Date().toISOString(),
+      });
+      console.log("✅ Socket: Emitted order:created event to waiters");
+    } catch (err) {
+      console.error("❌ Failed to emit order:created socket event:", err);
+      // Không throw error để không ảnh hưởng đến việc tạo order
+    }
+
+    // 7. Trả về kết quả gộp
     return {
       order: newOrder,
       details: createdDetails,
@@ -247,6 +267,24 @@ class OrdersService {
     const updatedOrder = await this.ordersRepo.update(orderId, {
       totalAmount: existingOrder.order.totalAmount + additionalAmount,
     });
+
+    // 6. Emit Socket.IO event để thông báo waiter có món mới được thêm
+    try {
+      const io = getIO();
+      const tableInfo = await this.tablesRepo.getById(existingOrder.order.tableId);
+      io.to("waiters").emit("order:updated", {
+        orderId: orderId,
+        tableId: existingOrder.order.tableId,
+        tableNumber: tableInfo?.tableNumber || existingOrder.order.tableId,
+        displayOrder: existingOrder.order.displayOrder,
+        newItemCount: createdDetails.length,
+        newTotalAmount: updatedOrder.totalAmount,
+        timestamp: new Date().toISOString(),
+      });
+      console.log("✅ Socket: Emitted order:updated event to waiters");
+    } catch (err) {
+      console.error("❌ Failed to emit order:updated socket event:", err);
+    }
 
     return {
       order: updatedOrder,

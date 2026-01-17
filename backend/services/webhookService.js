@@ -6,10 +6,19 @@
 
 class WebhookService {
   constructor() {
+    this.initialize();
+  }
+
+  initialize() {
     this.staffBackendUrl = process.env.STAFF_BACKEND_URL;
     this.enabled =
       !!this.staffBackendUrl &&
       this.staffBackendUrl !== "https://your-staff-backend-url.onrender.com";
+
+    console.log("🔧 Webhook Service initialized:", {
+      staffBackendUrl: this.staffBackendUrl,
+      enabled: this.enabled,
+    });
   }
 
   /**
@@ -85,6 +94,53 @@ class WebhookService {
         console.log(
           "✅ Webhook: Notified staff backend about order submission",
           orderData.orderId
+        );
+      } else {
+        const errorText = await response.text();
+        console.error("❌ Webhook failed:", response.status, errorText);
+      }
+    } catch (error) {
+      console.error("❌ Webhook error:", error.message);
+    }
+  }
+
+  /**
+   * Gửi thông báo yêu cầu thanh toán đến Staff Backend
+   * @param {Object} paymentData - Thông tin yêu cầu thanh toán
+   */
+  async notifyPaymentRequest(paymentData) {
+    console.log("🔍 notifyPaymentRequest called:", {
+      enabled: this.enabled,
+      staffBackendUrl: this.staffBackendUrl,
+      paymentData: paymentData,
+    });
+
+    if (!this.enabled) {
+      console.log("⚠️  Webhook disabled: STAFF_BACKEND_URL not configured");
+      return;
+    }
+
+    try {
+      const webhookUrl = `${this.staffBackendUrl}/api/webhooks/payment-request`;
+
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Source": "customer-backend",
+          "X-Tenant-ID": paymentData.tenantId || "",
+        },
+        body: JSON.stringify({
+          event: "payment:request",
+          data: paymentData,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        console.log(
+          "✅ Webhook: Notified staff backend about payment request",
+          paymentData.requestId
         );
       } else {
         const errorText = await response.text();

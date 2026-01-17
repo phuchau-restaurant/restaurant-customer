@@ -1,10 +1,22 @@
 //Nơi khởi động Express App - Customer App
 
-import express from "express";
-import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+
+// Cấu hình môi trường TRƯỚC KHI import các file khác
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, ".env") }); // Load from backend/.env
+
+// Debug: Kiểm tra env đã load chưa
+console.log("🔍 ENV Check:", {
+  STAFF_BACKEND_URL: process.env.STAFF_BACKEND_URL,
+  PORT: process.env.PORT,
+});
+
+import express from "express";
+import cors from "cors";
 import http from "http";
 import { initSocket } from "./configs/socket.js";
 
@@ -27,15 +39,14 @@ import paymentRoutes from "./routers/payment.routes.js";
 //Import middlewares
 import { errorMiddleware } from "./middlewares/errorMiddleware.js";
 import { requestLogger } from "./middlewares/loggerMiddleware.js";
-
-// Cấu hình môi trường
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, ".env") }); // Load from backend/.env
+import webhookService from "./services/webhookService.js";
 
 const app = express();
 const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Init Webhook Service (force initialization with env loaded)
+webhookService.initialize();
 
 // Init Socket
 initSocket(httpServer);
@@ -44,27 +55,29 @@ initSocket(httpServer);
 // Danh sách origins được phép (dev + production)
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5174",                                    // Development
-  process.env.FRONTEND_URL           // Production (Vercel)
+  "http://localhost:5174", // Development
+  process.env.FRONTEND_URL, // Production (Vercel)
 ];
 
 // Cấu hình CORS để hỗ trợ nhiều origins
-app.use(cors({
-  origin: function (origin, callback) {
-    // Cho phép requests không có origin (như mobile apps hoặc curl)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,               // Cho phép gửi cookie/token
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"]
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Cho phép requests không có origin (như mobile apps hoặc curl)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // Cho phép gửi cookie/token
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"],
+  })
+);
 app.use(express.json()); // QUAN TRỌNG: Để server đọc được JSON từ body request (req.body)
 // [LOGGER] Đặt ở đây để ghi lại MỌI request bay vào server
 app.use(requestLogger);

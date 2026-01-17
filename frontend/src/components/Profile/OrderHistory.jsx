@@ -61,20 +61,24 @@ const OrderHistory = ({ customer }) => {
       // Connect socket if not connected
       socketService.connect();
 
+      // Lấy tenantId từ localStorage (đã lưu khi login)
+      const tenantId = localStorage.getItem("tenantId");
+
       // Emit event to call waiter
       socketService.callWaiterForPayment({
         tableId: order.tableId,
-        tableNumber: order.tableNumber || `Bàn ${order.tableId}`,
+        tableNumber: order.tableNumber ||`${order.tableId}`,
         orderId: order.orderId,
         totalAmount: order.totalAmount,
-        customerName: customer?.name || 'Khách hàng',
+        customerName: customer?.name || "Khách hàng",
         displayOrder: order.displayOrder || `#${order.orderId}`,
+        tenantId: tenantId, // Lấy từ localStorage
       });
 
-      showSuccess('Đã gọi nhân viên! Vui lòng chờ trong giây lát.');
+      showSuccess("Đã gọi nhân viên! Vui lòng chờ trong giây lát.");
     } catch (error) {
-      console.error('Error calling waiter:', error);
-      showSuccess('Đã gọi nhân viên! Vui lòng chờ trong giây lát.');
+      console.error("Error calling waiter:", error);
+      showSuccess("Đã gọi nhân viên! Vui lòng chờ trong giây lát.");
     }
   };
 

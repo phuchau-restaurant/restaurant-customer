@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import webhookService from "../services/webhookService.js";
 
 let io;
 
@@ -36,17 +37,25 @@ export const initSocket = (httpServer) => {
     });
 
     // Handle call waiter for payment
-    socket.on("call_waiter_payment", (data) => {
+    socket.on("call_waiter_payment", async (data) => {
       console.log("📞 Payment request received:", data);
 
-      // Broadcast to all waiters
-      io.to("waiters").emit("payment_request", {
+      const paymentData = {
         ...data,
         timestamp: new Date().toISOString(),
         requestId: `PAY-${Date.now()}`,
-      });
+      };
 
-      console.log("✅ Payment request broadcasted to waiters");
+      // ❌ KHÔNG cần emit socket local (Staff frontend không connect đến Customer backend)
+      // io.to("waiters").emit("payment_request", paymentData);
+
+      // ✅ CHỈ gửi webhook đến Staff Backend
+      try {
+        await webhookService.notifyPaymentRequest(paymentData);
+        console.log("✅ Webhook sent to Staff Backend");
+      } catch (err) {
+        console.error("❌ Failed to send payment webhook:", err);
+      }
     });
 
     socket.on("disconnect", () => {

@@ -43,7 +43,8 @@ initSocket(httpServer);
 // --- MIDDLEWARE ---
 // Danh sách origins được phép (dev + production)
 const allowedOrigins = [
-  "http://localhost:5173",                                    // Development
+  "http://localhost:5173",
+  "http://localhost:5174",                                    // Development
   process.env.FRONTEND_URL           // Production (Vercel)
 ];
 

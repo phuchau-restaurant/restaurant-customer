@@ -5,16 +5,17 @@ let io;
 export const initSocket = (httpServer) => {
   // Danh sách origins được phép (dev + production)
   const allowedOrigins = [
-    "http://localhost:5173",                                    // Development
-    process.env.FRONTEND_URL            // Production (Vercel)
-  ];
+    "http://localhost:5173", // Development
+    process.env.FRONTEND_URL, // Production (Vercel)
+    process.env.STAFF_FRONTEND_URL || "http://localhost:5174", // Staff app (optional)
+  ].filter(Boolean); // Loại bỏ undefined
 
   io = new Server(httpServer, {
     cors: {
       origin: allowedOrigins,
       methods: ["GET", "POST"],
-      credentials: true
-    }
+      credentials: true,
+    },
   });
 
   io.on("connection", (socket) => {
@@ -22,20 +23,22 @@ export const initSocket = (httpServer) => {
 
     // Join room theo bàn (customer app)
     socket.on("join_table", (tableId) => {
-        socket.join(`table_${tableId}`);
-        console.log(`Socket ${socket.id} joined table_${tableId}`);
+      socket.join(`table_${tableId}`);
+      console.log(`Socket ${socket.id} joined table_${tableId}`);
     });
 
     // Join waiter room (staff app)
     socket.on("join_waiter", (waiterId) => {
       socket.join("waiters");
-      console.log(`Socket ${socket.id} joined waiters room (Waiter ID: ${waiterId})`);
+      console.log(
+        `Socket ${socket.id} joined waiters room (Waiter ID: ${waiterId})`
+      );
     });
 
     // Handle call waiter for payment
     socket.on("call_waiter_payment", (data) => {
       console.log("📞 Payment request received:", data);
-      
+
       // Broadcast to all waiters
       io.to("waiters").emit("payment_request", {
         ...data,

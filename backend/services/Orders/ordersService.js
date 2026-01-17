@@ -2,9 +2,17 @@
 import OrdersStatus from "../../constants/orderStatus.js";
 import OrderDetailStatus from "../../constants/orderdetailStatus.js";
 import { getIO } from "../../configs/socket.js";
+import webhookService from "../webhookService.js";
 class OrdersService {
   // Inject 6 Repo: Orders, OrderDetails, Menus, OrderItemModifiers, ModifierOptions, Tables
-  constructor(ordersRepo, orderDetailsRepo, menusRepo, orderItemModifiersRepo, modifierOptionsRepo, tablesRepo) {
+  constructor(
+    ordersRepo,
+    orderDetailsRepo,
+    menusRepo,
+    orderItemModifiersRepo,
+    modifierOptionsRepo,
+    tablesRepo
+  ) {
     this.ordersRepo = ordersRepo;
     this.orderDetailsRepo = orderDetailsRepo;
     this.menusRepo = menusRepo;
@@ -45,7 +53,7 @@ class OrdersService {
       // Track order count: Count number of ORDERS (not quantity) containing this dish
       // This will be incremented ONCE per order, regardless of quantity
       // We'll do this after the loop to avoid duplicate increments for same dish in one order
-      if (!orderDetailsToCreate.find(d => d.dishId === dishId)) {
+      if (!orderDetailsToCreate.find((d) => d.dishId === dishId)) {
         // First time seeing this dish in current order
         try {
           const currentCount = menuItem.orderCount || 0;
@@ -60,16 +68,18 @@ class OrdersService {
       let modifierTotal = 0;
       if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
         for (const mod of modifiers) {
-           const modOption = await this.modifierOptionsRepo.getById(mod.optionId);
-           if (modOption) {
-             modifierTotal += Number(modOption.price);
-             // Gán lại tên và giá chuẩn để dùng cho bước sau (lưu vào bảng order_item_modifiers)
-             mod.optionName = modOption.name;
-             mod.price = Number(modOption.price);
-           } else {
-             // Trường hợp không tìm thấy option (dữ liệu rác hoặc đã bị xóa)
-             mod.optionName = "Unknown Option"; 
-           }
+          const modOption = await this.modifierOptionsRepo.getById(
+            mod.optionId
+          );
+          if (modOption) {
+            modifierTotal += Number(modOption.price);
+            // Gán lại tên và giá chuẩn để dùng cho bước sau (lưu vào bảng order_item_modifiers)
+            mod.optionName = modOption.name;
+            mod.price = Number(modOption.price);
+          } else {
+            // Trường hợp không tìm thấy option (dữ liệu rác hoặc đã bị xóa)
+            mod.optionName = "Unknown Option";
+          }
         }
       }
 
@@ -135,26 +145,38 @@ class OrdersService {
     // 5. Update table's current_order_id to track active order
     await this.tablesRepo.update(tableId, { currentOrderId: newOrder.id });
 
-    // 6. Emit Socket.IO event để thông báo waiter có đơn mới
+    // 6. Thông báo order mới đến Staff (Socket + Webhook)
+    const tableInfo = await this.tablesRepo.getById(tableId);
+    const orderEventData = {
+      orderId: newOrder.id,
+      tableId: tableId,
+      tableNumber: tableInfo?.tableNumber || tableId,
+      displayOrder: newOrder.displayOrder,
+      totalAmount: newOrder.totalAmount,
+      itemCount: createdDetails.length,
+      tenantId: tenantId,
+      status: newOrder.status,
+      timestamp: new Date().toISOString(),
+    };
+
     try {
       const io = getIO();
-      const tableInfo = await this.tablesRepo.getById(tableId);
-      io.to("waiters").emit("order:created", {
-        orderId: newOrder.id,
-        tableId: tableId,
-        tableNumber: tableInfo?.tableNumber || tableId,
-        displayOrder: newOrder.displayOrder,
-        totalAmount: newOrder.totalAmount,
-        itemCount: createdDetails.length,
-        timestamp: new Date().toISOString(),
-      });
+      io.to("waiters").emit("order:created", orderEventData);
       console.log("✅ Socket: Emitted order:created event to waiters");
     } catch (err) {
       console.error("❌ Failed to emit order:created socket event:", err);
       // Không throw error để không ảnh hưởng đến việc tạo order
     }
 
-    // 7. Trả về kết quả gộp
+    // 7. Gửi webhook đến Staff Backend (giải pháp thay thế socket cross-backend)
+    try {
+      await webhookService.notifyNewOrder(orderEventData);
+    } catch (err) {
+      console.error("❌ Failed to send webhook:", err);
+      // Không throw error để không ảnh hưởng đến việc tạo order
+    }
+
+    // 8. Trả về kết quả gộp
     return {
       order: newOrder,
       details: createdDetails,
@@ -177,7 +199,10 @@ class OrdersService {
 
     // 1. Verify order exists and is ACTIVE (not completed/cancelled)
     const existingOrder = await this.getOrderById(orderId, tenantId);
-    if (existingOrder.order.status === 'Completed' || existingOrder.order.status === 'Cancelled') {
+    if (
+      existingOrder.order.status === "Completed" ||
+      existingOrder.order.status === "Cancelled"
+    ) {
       throw new Error("Cannot add items to a completed or cancelled order");
     }
 
@@ -210,7 +235,9 @@ class OrdersService {
       let modifierTotal = 0;
       if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
         for (const mod of modifiers) {
-          const modOption = await this.modifierOptionsRepo.getById(mod.optionId);
+          const modOption = await this.modifierOptionsRepo.getById(
+            mod.optionId
+          );
           if (modOption) {
             modifierTotal += Number(modOption.price);
             mod.optionName = modOption.name;
@@ -242,7 +269,9 @@ class OrdersService {
       return rest;
     });
 
-    const createdDetails = await this.orderDetailsRepo.createMany(finalDetailsPayload);
+    const createdDetails = await this.orderDetailsRepo.createMany(
+      finalDetailsPayload
+    );
 
     // 4. Save modifiers
     const modifiersToCreate = [];
@@ -271,7 +300,9 @@ class OrdersService {
     // 6. Emit Socket.IO event để thông báo waiter có món mới được thêm
     try {
       const io = getIO();
-      const tableInfo = await this.tablesRepo.getById(existingOrder.order.tableId);
+      const tableInfo = await this.tablesRepo.getById(
+        existingOrder.order.tableId
+      );
       io.to("waiters").emit("order:updated", {
         orderId: orderId,
         tableId: existingOrder.order.tableId,
@@ -327,12 +358,12 @@ class OrdersService {
         dishName: dishInfo?.name || "Unknown Dish",
         menu: dishInfo
           ? {
-            id: dishInfo.id,
-            name: dishInfo.name,
-            categoryId: dishInfo.categoryId,
-            image: dishInfo.imgUrl,  // Fixed: use imgUrl instead of image
-            price: dishInfo.price,
-          }
+              id: dishInfo.id,
+              name: dishInfo.name,
+              categoryId: dishInfo.categoryId,
+              image: dishInfo.imgUrl, // Fixed: use imgUrl instead of image
+              price: dishInfo.price,
+            }
           : null,
       };
     });
@@ -346,7 +377,7 @@ class OrdersService {
     // Group modifiers by order_detail_id và gắn vào details
     // Group modifiers by order_detail_id và gắn vào details
     // Đồng thời fetch thông tin giá từ bảng modifier_options nếu cần
-    const modifierOptionIds = allModifiers.map(m => m.modifierOptionId);
+    const modifierOptionIds = allModifiers.map((m) => m.modifierOptionId);
 
     // Fetch full modifier options info (để lấy giá)
     let modifierOptionsDetails = [];
@@ -354,7 +385,7 @@ class OrdersService {
       // Giả sử có hàm getByIds. Nếu không có thì dùng Promise.all hoặc sửa Repo
       // Ở đây ta dùng Promise.all tạm thời nếu repo chưa support getByIds
       modifierOptionsDetails = await Promise.all(
-        modifierOptionIds.map(id => this.modifierOptionsRepo.getById(id))
+        modifierOptionIds.map((id) => this.modifierOptionsRepo.getById(id))
       );
     }
 
@@ -363,10 +394,12 @@ class OrdersService {
       modifiers: allModifiers
         .filter((mod) => mod.orderDetailId === detail.id)
         .map((mod) => {
-          const fullOption = modifierOptionsDetails.find(opt => opt && opt.id === mod.modifierOptionId);
+          const fullOption = modifierOptionsDetails.find(
+            (opt) => opt && opt.id === mod.modifierOptionId
+          );
           return {
             ...mod.toResponse(),
-            price: fullOption ? fullOption.price : 0
+            price: fullOption ? fullOption.price : 0,
           };
         }),
     }));
@@ -492,7 +525,9 @@ class OrdersService {
       // Tự động chuyển các OrderDetail có status Pending/Preparing thành Ready
       const allDetails = currentOrder.details;
       const pendingOrPreparingItems = allDetails.filter(
-        (item) => item.status === OrderDetailStatus.PENDING || item.status === OrderDetailStatus.PREPARING
+        (item) =>
+          item.status === OrderDetailStatus.PENDING ||
+          item.status === OrderDetailStatus.PREPARING
       );
 
       // Update các items chưa hoàn thành thành Ready
@@ -505,9 +540,11 @@ class OrdersService {
       }
 
       updates.completedAt = new Date();
-      
+
       // Clear table's current_order_id since order is completed
-      await this.tablesRepo.update(currentOrder.order.tableId, { currentOrderId: null });
+      await this.tablesRepo.update(currentOrder.order.tableId, {
+        currentOrderId: null,
+      });
     }
 
     // IF OrderStatus == Served -> Tự động chuyển các items thành Served
@@ -518,7 +555,8 @@ class OrdersService {
       // Chuyển tất cả items còn Ready thành Served
       const allDetails = currentOrder.details;
       const readyItems = allDetails.filter(
-        (item) => item.status === OrderDetailStatus.READY ||
+        (item) =>
+          item.status === OrderDetailStatus.READY ||
           item.status === OrderDetailStatus.PENDING ||
           item.status === OrderDetailStatus.PREPARING
       );
@@ -540,9 +578,11 @@ class OrdersService {
       await this.orderDetailsRepo.updateByOrderId(id, {
         status: OrderDetailStatus.CANCELLED,
       });
-      
+
       // Clear table's current_order_id since order is cancelled
-      await this.tablesRepo.update(currentOrder.order.tableId, { currentOrderId: null });
+      await this.tablesRepo.update(currentOrder.order.tableId, {
+        currentOrderId: null,
+      });
     }
 
     // 3. Gọi Repo update order header
@@ -568,7 +608,9 @@ class OrdersService {
     if (orderInfo.order.tableId) {
       const table = await this.tablesRepo.getById(orderInfo.order.tableId);
       if (table && table.currentOrderId === id) {
-        await this.tablesRepo.update(orderInfo.order.tableId, { currentOrderId: null });
+        await this.tablesRepo.update(orderInfo.order.tableId, {
+          currentOrderId: null,
+        });
       }
     }
 
@@ -606,7 +648,7 @@ class OrdersService {
 
     // Kitchen LUÔN lọc bỏ đơn Unsubmit (không giống waiter)
     // Bếp chỉ thấy đơn đã được waiter xác nhận gửi
-    orders = orders.filter(o => o.status !== OrdersStatus.UNSUBMIT);
+    orders = orders.filter((o) => o.status !== OrdersStatus.UNSUBMIT);
 
     if (!orders || orders.length === 0) return [];
 
@@ -615,11 +657,11 @@ class OrdersService {
 
     // --- LẤY TÊN BÀN ---
     // Lấy danh sách table_id duy nhất
-    const tableIds = [...new Set(orders.map(o => o.tableId))];
+    const tableIds = [...new Set(orders.map((o) => o.tableId))];
     const tablesInfo = await this.tablesRepo.getByIds(tableIds);
     // Tạo map để tra cứu nhanh: tableId -> tableName
     const tableMap = {};
-    tablesInfo.forEach(table => {
+    tablesInfo.forEach((table) => {
       tableMap[table.id] = table.tableNumber;
     });
 
@@ -762,27 +804,28 @@ class OrdersService {
     }
 
     // 3. Kiểm tra và đếm các món chưa xác nhận (status null hoặc không phải Pending/Ready/Served/Cancelled)
-    const unconfirmedItems = details.filter(item =>
-      !item.status ||
-      (item.status !== OrderDetailStatus.PENDING &&
-        item.status !== OrderDetailStatus.READY &&
-        item.status !== OrderDetailStatus.SERVED &&
-        item.status !== OrderDetailStatus.CANCELLED)
+    const unconfirmedItems = details.filter(
+      (item) =>
+        !item.status ||
+        (item.status !== OrderDetailStatus.PENDING &&
+          item.status !== OrderDetailStatus.READY &&
+          item.status !== OrderDetailStatus.SERVED &&
+          item.status !== OrderDetailStatus.CANCELLED)
     );
 
     // 3.1. Nếu có món chưa xác nhận và người dùng chưa confirm -> trả về thông tin để frontend xử lý
     if (unconfirmedItems.length > 0 && !confirmUnconfirmed) {
       return {
         needsConfirmation: true,
-        unconfirmedItems: unconfirmedItems.map(item => ({
+        unconfirmedItems: unconfirmedItems.map((item) => ({
           id: item.id,
           dishId: item.dishId,
           name: item.name,
           quantity: item.quantity,
-          status: item.status
+          status: item.status,
         })),
         order: order,
-        details: details
+        details: details,
       };
     }
 
@@ -804,7 +847,7 @@ class OrdersService {
     return {
       needsConfirmation: false,
       ...result,
-      itemsUpdatedToPending: unconfirmedItems.length
+      itemsUpdatedToPending: unconfirmedItems.length,
     };
   }
 
@@ -819,21 +862,24 @@ class OrdersService {
 
     console.log(`📋 getMyOrders: waiterId=${waiterId}, tenantId=${tenantId}`);
     const orders = await this.ordersRepo.getByWaiterId(waiterId, tenantId);
-    console.log(`📋 getMyOrders: Found ${orders.length} orders, statuses:`, orders.map(o => o.status));
+    console.log(
+      `📋 getMyOrders: Found ${orders.length} orders, statuses:`,
+      orders.map((o) => o.status)
+    );
 
     // Enrich with table names
     if (orders && orders.length > 0) {
-      const tableIds = [...new Set(orders.map(o => o.tableId))];
+      const tableIds = [...new Set(orders.map((o) => o.tableId))];
       const tablesInfo = await this.tablesRepo.getByIds(tableIds);
       const tableMap = {};
-      tablesInfo.forEach(table => {
+      tablesInfo.forEach((table) => {
         tableMap[table.id] = table.tableNumber;
       });
 
       // Map table names to orders
-      return orders.map(order => ({
+      return orders.map((order) => ({
         ...order,
-        tableNumber: tableMap[order.tableId] || order.tableId
+        tableNumber: tableMap[order.tableId] || order.tableId,
       }));
     }
 
@@ -851,17 +897,17 @@ class OrdersService {
 
     // Enrich with table names
     if (orders && orders.length > 0) {
-      const tableIds = [...new Set(orders.map(o => o.tableId))];
+      const tableIds = [...new Set(orders.map((o) => o.tableId))];
       const tablesInfo = await this.tablesRepo.getByIds(tableIds);
       const tableMap = {};
-      tablesInfo.forEach(table => {
+      tablesInfo.forEach((table) => {
         tableMap[table.id] = table.tableNumber;
       });
 
       // Map table names to orders
-      return orders.map(order => ({
+      return orders.map((order) => ({
         ...order,
-        tableNumber: tableMap[order.tableId] || order.tableId
+        tableNumber: tableMap[order.tableId] || order.tableId,
       }));
     }
 
@@ -897,14 +943,15 @@ class OrdersService {
 
         // Get modifiers
         const detailIds = details.map((d) => d.id);
-        const allModifiers = await this.orderItemModifiersRepo.getByOrderDetailIds(detailIds);
+        const allModifiers =
+          await this.orderItemModifiersRepo.getByOrderDetailIds(detailIds);
 
         // Fetch modifier prices
-        const modifierOptionIds = allModifiers.map(m => m.modifierOptionId);
+        const modifierOptionIds = allModifiers.map((m) => m.modifierOptionId);
         let modifierOptionsDetails = [];
         if (modifierOptionIds.length > 0) {
           modifierOptionsDetails = await Promise.all(
-            modifierOptionIds.map(id => this.modifierOptionsRepo.getById(id))
+            modifierOptionIds.map((id) => this.modifierOptionsRepo.getById(id))
           );
         }
 
@@ -914,10 +961,12 @@ class OrdersService {
           const itemModifiers = allModifiers
             .filter((mod) => mod.orderDetailId === detail.id)
             .map((mod) => {
-              const fullOption = modifierOptionsDetails.find(opt => opt && opt.id === mod.modifierOptionId);
+              const fullOption = modifierOptionsDetails.find(
+                (opt) => opt && opt.id === mod.modifierOptionId
+              );
               return {
                 ...mod.toResponse(),
-                price: fullOption ? fullOption.price : 0
+                price: fullOption ? fullOption.price : 0,
               };
             });
 
@@ -964,7 +1013,7 @@ class OrdersService {
 
     // 1. Get table info to check current_order_id
     const table = await this.tablesRepo.getById(tableId);
-    
+
     if (!table) {
       throw new Error("Table not found");
     }
@@ -982,14 +1031,17 @@ class OrdersService {
     // 3. Get the current order details
     try {
       const order = await this.getOrderById(table.currentOrderId, tenantId);
-      
+
       // Verify order is still active (not completed/cancelled)
-      if (order.order.status === 'Completed' || order.order.status === 'Cancelled') {
+      if (
+        order.order.status === "Completed" ||
+        order.order.status === "Cancelled"
+      ) {
         // Order is no longer active, clear current_order_id
         await this.tablesRepo.update(tableId, { currentOrderId: null });
         return null;
       }
-      
+
       return order;
     } catch (error) {
       // If order not found, clear the stale current_order_id

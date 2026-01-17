@@ -457,9 +457,9 @@ class CustomersController {
 
   /**
    * [POST] /api/customers/forgot-password
+   * Public endpoint - không cần tenantId
    */
   requestPasswordReset = async (req, res, next) => {
-    const tenantId = req.tenantId;
     const { email } = req.body;
 
     try {
@@ -467,7 +467,7 @@ class CustomersController {
         return res.status(400).json({ message: "Vui lòng nhập email" });
       }
 
-      await this.customersService.requestPasswordResetOTP(tenantId, email);
+      await this.customersService.requestPasswordResetOTP(email);
 
       return res.status(200).json({
         success: true,
@@ -481,9 +481,9 @@ class CustomersController {
 
   /**
    * [POST] /api/customers/reset-password
+   * Public endpoint - không cần tenantId
    */
   resetPassword = async (req, res, next) => {
-    const tenantId = req.tenantId;
     const { email, otp, newPassword } = req.body;
 
     try {
@@ -491,7 +491,7 @@ class CustomersController {
         return res.status(400).json({ message: "Thiếu thông tin xác thực" });
       }
 
-      await this.customersService.resetPasswordWithOTP(tenantId, email, otp, newPassword);
+      await this.customersService.resetPasswordWithOTP(email, otp, newPassword);
 
       return res.status(200).json({
         success: true,

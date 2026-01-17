@@ -418,27 +418,25 @@ class CustomersService {
 
   /**
    * Request OTP for password reset
-   * @param {string} tenantId
    * @param {string} email
    */
-  async requestPasswordResetOTP(tenantId, email) {
-    if (!tenantId) throw new Error("Tenant ID is required");
+  async requestPasswordResetOTP(email) {
     if (!email) throw new Error("Email is required");
 
-    const customers = await this.customerRepo.findByEmail(tenantId, email.trim());
+    // Tìm customer từ email (toàn hệ thống, không cần tenantId)
+    const customers = await this.customerRepo.findByEmailGlobal(email.trim());
     if (!customers || customers.length === 0) {
       throw new Error("Email không tồn tại trong hệ thống");
     }
 
     const otp = generateOTP();
-    // Save OTP with generic purpose or just relying on email key. 
-    // otpHelper usually saves simple Key -> Value.
     await saveOTP(email.trim(), otp);
 
-    const customer = customers[0]; // We already found customer above
+    const customer = customers[0];
 
     try {
-      await emailService.sendPasswordResetEmail(email.trim(), otp, customer.full_name || customer.fullName || "Quý khách");
+      await emailService.sendPasswordResetEmail(email.trim(), otp, customer.fullName || "Quý khách");
+      console.log(`✅ Password Reset OTP sent to ${email.trim()}`);
     } catch (error) {
        console.error("Send OTP Error:", error);
        throw new Error("Không thể gửi email OTP. Vui lòng thử lại sau.");
@@ -449,12 +447,11 @@ class CustomersService {
 
   /**
    * Reset password using Verified OTP
-   * @param {string} tenantId
    * @param {string} email
    * @param {string} otp
    * @param {string} newPassword
    */
-  async resetPasswordWithOTP(tenantId, email, otp, newPassword) {
+  async resetPasswordWithOTP(email, otp, newPassword) {
     if (!email || !otp || !newPassword) throw new Error("Thiếu thông tin");
 
     // 1. Verify OTP
@@ -463,8 +460,8 @@ class CustomersService {
       throw new Error(verification?.reason || "Mã OTP không chính xác hoặc đã hết hạn");
     }
 
-    // 2. Find Customer
-    const customers = await this.customerRepo.findByEmail(tenantId, email.trim());
+    // 2. Find Customer (toàn hệ thống, không cần tenantId)
+    const customers = await this.customerRepo.findByEmailGlobal(email.trim());
     if (!customers || customers.length === 0) {
       throw new Error("Email không tồn tại");
     }
@@ -479,7 +476,6 @@ class CustomersService {
     // 4. Update password
     return await this.customerRepo.update(customer.id, { 
       password: hashedPassword,
-      // Optional: Mark as active/verified if not already? (Usually reset pass implies verification)
       isActive: true 
     });
   }

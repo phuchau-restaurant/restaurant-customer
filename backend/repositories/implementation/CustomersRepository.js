@@ -105,6 +105,20 @@ export class CustomerRepository extends BaseRepository {
     return data.map(item => new Customers(item)) || [];
   }
 
+  /**
+   * Find by email globally (without tenantId) - for password reset
+   */
+  async findByEmailGlobal(email) {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq('email', email)
+      .limit(1); // Chỉ lấy 1 record đầu tiên
+
+    if (error) throw new Error(`FindByEmailGlobal failed: ${error.message}`);
+    return data.map(item => new Customers(item)) || [];
+  }
+
 async getById(id) {
     const rawData = await super.getById(id); 
     return rawData ? new Customers(rawData) : null; 

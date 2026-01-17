@@ -5,6 +5,13 @@ import { customersController } from "../containers/customersContainer.js";
 import { tenantMiddleware } from "../middlewares/tenantMiddleware.js";
 const router = express.Router();
 
+// ========== PUBLIC ROUTES (NO TENANT REQUIRED) ==========
+// Password reset - tìm tenantId từ email
+router.post("/forgot-password", customersController.requestPasswordReset);
+router.post("/verify-reset-otp", customersController.verifyResetOTP);
+router.post("/reset-password", customersController.resetPassword);
+
+// ========== PROTECTED ROUTES (REQUIRE TENANT) ==========
 // Áp dụng middleware cho TOÀN BỘ các route bên dưới
 router.use(tenantMiddleware);
 
@@ -16,9 +23,6 @@ router.post("/login", customersController.customerLogin);
 router.post("/register", customersController.customerRegister);
 router.post("/verify-otp", customersController.verifyOTP);
 router.post("/auth/google", customersController.googleAuth);
-router.post("/forgot-password", customersController.requestPasswordReset);
-router.post("/verify-reset-otp", customersController.verifyResetOTP);
-router.post("/reset-password", customersController.resetPassword);
 
 // Profile management routes (specific routes before generic :id routes)
 router.get("/profile/:customerId", customersController.getProfile);

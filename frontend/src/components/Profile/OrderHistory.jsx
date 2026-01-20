@@ -129,6 +129,13 @@ const OrderHistory = ({ customer }) => {
         bg: "bg-red-50",
         border: "border-red-200",
       },
+      paid: {
+        label: "Đã thanh toán",
+        icon: CheckCircle,
+        color: "text-emerald-600",
+        bg: "bg-emerald-50",
+        border: "border-emerald-200",
+      },
     };
     return configs[statusLower] || configs.pending;
   };

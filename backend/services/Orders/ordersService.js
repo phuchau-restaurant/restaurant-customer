@@ -28,59 +28,82 @@ class OrdersService {
       throw new Error("Order must have at least one dish");
     }
 
-    // 1. Tính toán & Chuẩn bị data chi tiết
-    let calculatedTotalAmount = 0;
-    const orderDetailsToCreate = [];
+    // === STEP 1: Collect tất cả IDs cần fetch (tránh N+1 query) ===
+    const allDishIds = dishes
+      .map(d => d.dishId)
+      .filter(id => id && id > 0);
 
+    const allModifierIds = dishes
+      .flatMap(d => (d.modifiers || []).map(m => m.optionId))
+      .filter(Boolean);
+
+    // === STEP 2: Batch fetch chỉ 2 queries thay vì N+1 ===
+    const [menuItems, modifierOptions] = await Promise.all([
+      this.menusRepo.getByIds(allDishIds),
+      allModifierIds.length > 0
+        ? this.modifierOptionsRepo.getByIds(allModifierIds)
+        : Promise.resolve([])
+    ]);
+
+    // === STEP 3: Tạo Maps để lookup O(1) ===
+    const menuMap = new Map(menuItems.map(m => [m.id, m]));
+    const modifierMap = new Map(modifierOptions.map(m => [m.id, m]));
+
+    // === STEP 4: Validate all dishes exist and belong to tenant ===
     for (const dish of dishes) {
-      // API gửi dishId, quantity, description, modifiers
-      const { dishId, quantity, description, modifiers } = dish;
-
-      if (!dishId || quantity <= 0) continue;
-
-      // Lấy thông tin món từ DB (Bảng dishes) để lấy giá chính xác
-      const menuItem = await this.menusRepo.getById(dishId);
-
+      const menuItem = menuMap.get(dish.dishId);
       if (!menuItem) {
-        throw new Error(`Dish with ID ${dishId} not found`);
+        throw new Error(`Dish with ID ${dish.dishId} not found`);
       }
       if (menuItem.tenantId !== tenantId) {
-        throw new Error(`Dish ${dishId} does not belong to this tenant`);
+        throw new Error(`Dish ${dish.dishId} does not belong to this tenant`);
       }
+    }
 
+    // === STEP 5: Tính toán & Chuẩn bị data chi tiết ===
+    let calculatedTotalAmount = 0;
+    const orderDetailsToCreate = [];
+    const dishesToUpdateCount = new Set(); // Track unique dishes for order count
+
+    for (const dish of dishes) {
+      const { dishId, quantity, description, modifiers } = dish;
+      if (!dishId || quantity <= 0) continue;
+
+      const menuItem = menuMap.get(dishId); // O(1) lookup, không query
       const unitPrice = menuItem.price;
 
       // Track order count: Count number of ORDERS (not quantity) containing this dish
-      // This will be incremented ONCE per order, regardless of quantity
-      // We'll do this after the loop to avoid duplicate increments for same dish in one order
-      if (!orderDetailsToCreate.find((d) => d.dishId === dishId)) {
-        // First time seeing this dish in current order
+      if (!dishesToUpdateCount.has(dishId)) {
+        dishesToUpdateCount.add(dishId);
         try {
           const currentCount = menuItem.orderCount || 0;
           await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
         } catch (err) {
           console.error(`Failed to update order count for dish ${dishId}`, err);
-          // Ignore error to not fail the order creation
         }
       }
 
-      // Tính giá modifiers và lấy tên chuẩn từ DB
+      // Xử lý modifiers với Map lookup (không query)
       let modifierTotal = 0;
+      const processedModifiers = [];
+
       if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
-        for (const mod of modifiers) {
-          const modOption = await this.modifierOptionsRepo.getById(
-            mod.optionId
-          );
+        modifiers.forEach(mod => {
+          const modOption = modifierMap.get(mod.optionId); // O(1) lookup
           if (modOption) {
             modifierTotal += Number(modOption.price);
-            // Gán lại tên và giá chuẩn để dùng cho bước sau (lưu vào bảng order_item_modifiers)
-            mod.optionName = modOption.name;
-            mod.price = Number(modOption.price);
+            processedModifiers.push({
+              ...mod,
+              optionName: modOption.name,
+              price: Number(modOption.price)
+            });
           } else {
-            // Trường hợp không tìm thấy option (dữ liệu rác hoặc đã bị xóa)
-            mod.optionName = "Unknown Option";
+            processedModifiers.push({
+              ...mod,
+              optionName: "Unknown Option"
+            });
           }
-        }
+        });
       }
 
       const subTotal = (unitPrice + modifierTotal) * quantity;
@@ -88,12 +111,12 @@ class OrdersService {
 
       orderDetailsToCreate.push({
         tenantId,
-        dishId: dishId,
+        dishId,
         quantity,
         unitPrice,
         note: description,
         status: null,
-        modifiers, // Lưu modifiers tạm để xử lý sau
+        modifiers: processedModifiers,
       });
     }
 
@@ -206,46 +229,82 @@ class OrdersService {
       throw new Error("Cannot add items to a completed or cancelled order");
     }
 
-    // 2. Calculate new items
+    // === STEP 1: Collect tất cả IDs cần fetch (tránh N+1 query) ===
+    const allDishIds = dishes
+      .map(d => d.dishId)
+      .filter(id => id && id > 0);
+
+    const allModifierIds = dishes
+      .flatMap(d => (d.modifiers || []).map(m => m.optionId))
+      .filter(Boolean);
+
+    // === STEP 2: Batch fetch chỉ 2 queries thay vì N+1 ===
+    const [menuItems, modifierOptions] = await Promise.all([
+      this.menusRepo.getByIds(allDishIds),
+      allModifierIds.length > 0
+        ? this.modifierOptionsRepo.getByIds(allModifierIds)
+        : Promise.resolve([])
+    ]);
+
+    // === STEP 3: Tạo Maps để lookup O(1) ===
+    const menuMap = new Map(menuItems.map(m => [m.id, m]));
+    const modifierMap = new Map(modifierOptions.map(m => [m.id, m]));
+
+    // === STEP 4: Validate all dishes exist and belong to tenant ===
+    for (const dish of dishes) {
+      const menuItem = menuMap.get(dish.dishId);
+      if (!menuItem) {
+        throw new Error(`Dish with ID ${dish.dishId} not found`);
+      }
+      if (menuItem.tenantId !== tenantId) {
+        throw new Error(`Dish ${dish.dishId} does not belong to this tenant`);
+      }
+    }
+
+    // === STEP 5: Tính toán & Chuẩn bị data chi tiết ===
     let additionalAmount = 0;
     const newDetailsToCreate = [];
+    const dishesToUpdateCount = new Set();
 
     for (const dish of dishes) {
       const { dishId, quantity, description, modifiers } = dish;
       if (!dishId || quantity <= 0) continue;
 
-      // Fetch dish info
-      const menuItem = await this.menusRepo.getById(dishId);
-      if (!menuItem) throw new Error(`Dish with ID ${dishId} not found`);
-      if (menuItem.tenantId !== tenantId) {
-        throw new Error(`Dish ${dishId} does not belong to this tenant`);
-      }
-
+      const menuItem = menuMap.get(dishId); // O(1) lookup
       const unitPrice = menuItem.price;
 
-      // Increment order count
-      try {
-        const currentCount = menuItem.orderCount || 0;
-        await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
-      } catch (err) {
-        console.error(`Failed to update order count for dish ${dishId}`, err);
+      // Increment order count (once per unique dish)
+      if (!dishesToUpdateCount.has(dishId)) {
+        dishesToUpdateCount.add(dishId);
+        try {
+          const currentCount = menuItem.orderCount || 0;
+          await this.menusRepo.update(dishId, { orderCount: currentCount + 1 });
+        } catch (err) {
+          console.error(`Failed to update order count for dish ${dishId}`, err);
+        }
       }
 
-      // Calculate modifier prices
+      // Xử lý modifiers với Map lookup (không query)
       let modifierTotal = 0;
+      const processedModifiers = [];
+
       if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
-        for (const mod of modifiers) {
-          const modOption = await this.modifierOptionsRepo.getById(
-            mod.optionId
-          );
+        modifiers.forEach(mod => {
+          const modOption = modifierMap.get(mod.optionId); // O(1) lookup
           if (modOption) {
             modifierTotal += Number(modOption.price);
-            mod.optionName = modOption.name;
-            mod.price = Number(modOption.price);
+            processedModifiers.push({
+              ...mod,
+              optionName: modOption.name,
+              price: Number(modOption.price)
+            });
           } else {
-            mod.optionName = "Unknown Option";
+            processedModifiers.push({
+              ...mod,
+              optionName: "Unknown Option"
+            });
           }
-        }
+        });
       }
 
       const subTotal = (unitPrice + modifierTotal) * quantity;
@@ -259,7 +318,7 @@ class OrdersService {
         unitPrice,
         note: description,
         status: null,
-        modifiers,
+        modifiers: processedModifiers,
       });
     }
 
@@ -358,12 +417,12 @@ class OrdersService {
         dishName: dishInfo?.name || "Unknown Dish",
         menu: dishInfo
           ? {
-              id: dishInfo.id,
-              name: dishInfo.name,
-              categoryId: dishInfo.categoryId,
-              image: dishInfo.imgUrl, // Fixed: use imgUrl instead of image
-              price: dishInfo.price,
-            }
+            id: dishInfo.id,
+            name: dishInfo.name,
+            categoryId: dishInfo.categoryId,
+            image: dishInfo.imgUrl, // Fixed: use imgUrl instead of image
+            price: dishInfo.price,
+          }
           : null,
       };
     });
@@ -380,13 +439,10 @@ class OrdersService {
     const modifierOptionIds = allModifiers.map((m) => m.modifierOptionId);
 
     // Fetch full modifier options info (để lấy giá)
+    // Sử dụng getByIds() để tránh N+1 query
     let modifierOptionsDetails = [];
     if (modifierOptionIds.length > 0 && this.modifierOptionsRepo) {
-      // Giả sử có hàm getByIds. Nếu không có thì dùng Promise.all hoặc sửa Repo
-      // Ở đây ta dùng Promise.all tạm thời nếu repo chưa support getByIds
-      modifierOptionsDetails = await Promise.all(
-        modifierOptionIds.map((id) => this.modifierOptionsRepo.getById(id))
-      );
+      modifierOptionsDetails = await this.modifierOptionsRepo.getByIds(modifierOptionIds);
     }
 
     const enrichedDetailsWithModifiers = enrichedDetails.map((detail) => ({
@@ -427,30 +483,68 @@ class OrdersService {
       // 3. Xóa order details cũ
       await this.orderDetailsRepo.deleteByOrderId(id);
 
-      // 4. Tính toán totalAmount từ dishes mới
+      // === STEP 1: Collect tất cả IDs cần fetch (tránh N+1 query) ===
+      const allDishIds = dishes
+        .map(d => d.dishId)
+        .filter(id => id && id > 0);
+
+      const allModifierIds = dishes
+        .flatMap(d => (d.modifiers || []).map(m => m.optionId))
+        .filter(Boolean);
+
+      // === STEP 2: Batch fetch chỉ 2 queries thay vì N+1 ===
+      const [menuItems, modifierOptions] = await Promise.all([
+        this.menusRepo.getByIds(allDishIds),
+        allModifierIds.length > 0
+          ? this.modifierOptionsRepo.getByIds(allModifierIds)
+          : Promise.resolve([])
+      ]);
+
+      // === STEP 3: Tạo Maps để lookup O(1) ===
+      const menuMap = new Map(menuItems.map(m => [m.id, m]));
+      const modifierMap = new Map(modifierOptions.map(m => [m.id, m]));
+
+      // === STEP 4: Validate all dishes exist ===
+      for (const dish of dishes) {
+        const menuItem = menuMap.get(dish.dishId);
+        if (!menuItem) {
+          throw new Error(`Dish with ID ${dish.dishId} not found`);
+        }
+      }
+
+      // === STEP 5: Tính toán totalAmount từ dishes mới ===
       let calculatedTotalAmount = 0;
       const orderDetailsToCreate = [];
 
       for (const dish of dishes) {
         const { dishId, quantity, description, modifiers } = dish;
-
         if (!dishId || quantity <= 0) continue;
 
-        // Lấy thông tin món từ DB để lấy giá chính xác
-        const menuItem = await this.menusRepo.getById(dishId);
-        if (!menuItem) {
-          throw new Error(`Dish with ID ${dishId} not found`);
-        }
-
+        const menuItem = menuMap.get(dishId); // O(1) lookup
         const unitPrice = menuItem.price;
 
-        // Tính giá modifiers
+        // Tính giá modifiers từ DB (không tin tưởng giá từ client)
         let modifierTotal = 0;
-        if (modifiers && Array.isArray(modifiers)) {
-          modifierTotal = modifiers.reduce(
-            (sum, mod) => sum + (mod.price || 0),
-            0
-          );
+        const processedModifiers = [];
+
+        if (modifiers && Array.isArray(modifiers) && modifiers.length > 0) {
+          modifiers.forEach(mod => {
+            const dbOption = modifierMap.get(mod.optionId); // O(1) lookup
+            if (dbOption) {
+              const price = Number(dbOption.price || dbOption.priceAdjustment || 0);
+              modifierTotal += price;
+              processedModifiers.push({
+                ...mod,
+                optionName: dbOption.name,
+                price: price
+              });
+            } else {
+              processedModifiers.push({
+                ...mod,
+                optionName: mod.optionName || "Unknown Option"
+              });
+            }
+          });
         }
 
         const subTotal = (unitPrice + modifierTotal) * quantity;
@@ -464,7 +558,7 @@ class OrdersService {
           unitPrice,
           note: description || "",
           status: OrderDetailStatus.PENDING,
-          modifiers, // Lưu tạm
+          modifiers: processedModifiers,
         });
       }
 
